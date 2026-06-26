@@ -1,0 +1,14 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "rootDir": "src",
+    "outDir": "dist",
+    "paths": {
+      "@socialcart/shared": ["../../packages/shared/src"],
+      "@socialcart/integrations": ["../../packages/integrations/src"],
+      "@socialcart/whatsapp": ["../../packages/whatsapp/src"]
+    }
+  },
+  "include": ["src/**/*"],
+  "exclude": ["node_modules", "dist"]
+}
