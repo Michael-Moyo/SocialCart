@@ -193,32 +193,91 @@ export const browseFlow: Flow = {
         const productId = input.startsWith('add_to_cart:') ? input.replace('add_to_cart:', '') : (ctx.data['selectedProductId'] as string | undefined) ?? input;
         const product = productMap[productId];
 
+        const maxQty = Math.min(product?.inventory ?? 10, 10);
+        const priceText = product ? formatPrice(product.price, product.currency) : '';
+
+        return [
+          {
+            type: 'update_context',
+            updates: { currentStep: 'select_quantity', data: { ...ctx.data, selectedProductId: productId } },
+          },
+          {
+            type: 'send_buttons',
+            body: `How many *${product?.name ?? 'items'}* would you like?\n\n${priceText ? `💰 ${priceText} each` : ''}\n\nTap a quantity or type a number (max ${maxQty}):`,
+            buttons: [
+              { id: 'qty:1', title: '1' },
+              { id: 'qty:2', title: '2' },
+              { id: 'qty:3', title: '3' },
+            ],
+          },
+        ];
+      },
+    ],
+    [
+      'select_quantity',
+      async (input: string, ctx: FlowContext): Promise<FlowAction[]> => {
+        if (input === 'main_menu') {
+          return [{ type: 'transition', flow: 'main-menu', step: 'handle_selection' }];
+        }
+        if (input === 'browse_all') {
+          const data = { ...ctx.data, searchQuery: 'browse_all' };
+          return [
+            { type: 'update_context', updates: { currentStep: 'results', data } },
+            { type: 'transition', flow: 'browse', step: 'results' },
+          ];
+        }
+
+        const productMap = (ctx.data['productMap'] as Record<string, ProductResult> | undefined) ?? {};
+        const productId = (ctx.data['selectedProductId'] as string | undefined) ?? '';
+        const product = productMap[productId];
+
+        const rawQty = input.startsWith('qty:') ? parseInt(input.replace('qty:', ''), 10) : parseInt(input, 10);
+        const maxQty = Math.min(product?.inventory ?? 10, 10);
+
+        if (isNaN(rawQty) || rawQty < 1) {
+          return [
+            {
+              type: 'send_buttons',
+              body: `Please choose a quantity (1–${maxQty}), or tap one of the options:`,
+              buttons: [
+                { id: 'qty:1', title: '1' },
+                { id: 'qty:2', title: '2' },
+                { id: 'qty:3', title: '3' },
+              ],
+            },
+          ];
+        }
+
+        const quantity = Math.min(rawQty, maxQty);
+
         const cartItem = {
           productId,
           sku: product?.sku ?? `SKU-${productId}`,
           name: product?.name ?? `Product ${productId}`,
           price: product?.price ?? 0,
           currency: product?.currency ?? (ctx.data['storeCurrency'] as string | undefined) ?? 'NGN',
-          quantity: 1,
+          quantity,
           ...(product?.imageUrl ? { imageUrl: product.imageUrl } : {}),
         };
 
         const newCart = [...ctx.cart];
         const existingIdx = newCart.findIndex((i) => i.productId === productId);
         if (existingIdx >= 0) {
-          newCart[existingIdx] = { ...newCart[existingIdx]!, quantity: newCart[existingIdx]!.quantity + 1 };
+          const combined = newCart[existingIdx]!.quantity + quantity;
+          newCart[existingIdx] = { ...newCart[existingIdx]!, quantity: Math.min(combined, maxQty) };
         } else {
           newCart.push(cartItem);
         }
 
         const totalItems = newCart.reduce((sum, item) => sum + item.quantity, 0);
         const cartTotal = newCart.reduce((sum, item) => sum + item.price * item.quantity, 0);
+        const addedQtyMsg = quantity > 1 ? `${quantity}× ` : '';
 
         return [
           { type: 'update_context', updates: { cart: newCart } },
           {
             type: 'send_buttons',
-            body: `✅ *${cartItem.name}* added to cart!\n\n🛒 Cart: ${totalItems} item${totalItems !== 1 ? 's' : ''} · Total: ${formatPrice(cartTotal, product?.currency ?? 'NGN')}`,
+            body: `✅ ${addedQtyMsg}*${cartItem.name}* added to cart!\n\n🛒 Cart: ${totalItems} item${totalItems !== 1 ? 's' : ''} · Total: ${formatPrice(cartTotal, product?.currency ?? 'NGN')}`,
             buttons: [
               { id: 'view_cart', title: 'View Cart' },
               { id: 'checkout', title: 'Checkout' },

@@ -157,14 +157,14 @@ export default function OnboardingPage() {
   const { data, isLoading } = useQuery<OnboardingStatus>({
     queryKey: ['onboarding'],
     queryFn: async () => {
-      const res = await api.get<{ success: boolean; data: OnboardingStatus }>('/settings/onboarding');
+      const res = await api.get<{ success: boolean; data: OnboardingStatus }>('/api/v1/settings/onboarding');
       return res.data.data;
     },
     refetchInterval: 10_000,
   });
 
   const completeMutation = useMutation({
-    mutationFn: () => api.patch('/settings/onboarding/complete'),
+    mutationFn: () => api.patch('/api/v1/settings/onboarding/complete'),
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ['onboarding'] });
       router.push('/dashboard');

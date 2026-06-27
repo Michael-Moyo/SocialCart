@@ -38,7 +38,7 @@ function OnboardingBanner() {
   const { data } = useQuery<OnboardingStatus>({
     queryKey: ['onboarding'],
     queryFn: async () => {
-      const res = await api.get<{ data: OnboardingStatus }>('/settings/onboarding');
+      const res = await api.get<{ data: OnboardingStatus }>('/api/v1/settings/onboarding');
       return res.data.data;
     },
   });
@@ -114,6 +114,9 @@ export default function DashboardPage() {
       void qc.invalidateQueries({ queryKey: ['orders'] });
       void qc.invalidateQueries({ queryKey: ['analytics-overview'] });
     },
+    'conversation:message': () => {
+      void qc.invalidateQueries({ queryKey: ['analytics-overview'] });
+    },
     'notification': () => {
       void qc.invalidateQueries({ queryKey: ['notifications'] });
     },
@@ -156,9 +159,9 @@ export default function DashboardPage() {
             change={analytics?.newCustomers?.change}
           />
           <StatCard
-            title="Conversations"
-            value={analytics?.conversations?.value?.toLocaleString() ?? activeIntegrations.toString()}
-            icon={analytics?.conversations ? <MessageSquare className="h-5 w-5" /> : <Plug className="h-5 w-5" />}
+            title="Conversations (7d)"
+            value={(analytics?.conversations?.value ?? 0).toLocaleString()}
+            icon={<MessageSquare className="h-5 w-5" />}
             change={analytics?.conversations?.change}
           />
         </div>
