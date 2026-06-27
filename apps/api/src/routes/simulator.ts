@@ -84,6 +84,47 @@ router.post('/message', validate(messageSchema), async (req: Request, res: Respo
       tenantId, phone, conversationId: conversation.id,
       customerId: customer.id,
       customerName: customer.name ?? undefined,
+      data: {
+        ...(storedCtx.data ?? {}),
+        fetchProducts: async (query: string, tid: string) => {
+          const where = {
+            tenantId: tid,
+            status: 'active' as const,
+            inventory: { gt: 0 },
+            ...(query && query !== 'browse_all'
+              ? { OR: [
+                  { name: { contains: query, mode: 'insensitive' as const } },
+                  { description: { contains: query, mode: 'insensitive' as const } },
+                ] }
+              : {}),
+          };
+          const products = await prisma.product.findMany({
+            where, take: 10, orderBy: { updatedAt: 'desc' },
+            select: { id: true, name: true, sku: true, price: true, currency: true, inventory: true, description: true, images: true },
+          });
+          return products.map((p) => ({
+            productId: p.id, sku: p.sku, name: p.name,
+            price: Number(p.price), currency: p.currency, inventory: p.inventory,
+            description: p.description ?? undefined,
+            imageUrl: ((p.images as Array<{ url: string }> | null)?.[0]?.url) ?? undefined,
+          }));
+        },
+        fetchOrders: async (query: string, tid: string, customerPhone: string) => {
+          const c = await prisma.customer.findFirst({ where: { tenantId: tid, phone: customerPhone } });
+          if (!c) return [];
+          const orders = await prisma.order.findMany({
+            where: { tenantId: tid, customerId: c.id },
+            orderBy: { createdAt: 'desc' }, take: 5,
+            select: { id: true, externalId: true, status: true, paymentStatus: true, fulfillmentStatus: true, total: true, currency: true, createdAt: true, shippingAddress: true, items: true },
+          });
+          return orders.map((o) => ({
+            ...o, total: String(o.total),
+            shippingAddress: o.shippingAddress as Record<string, unknown> | null,
+            items: (o.items as Array<{ name: string; price: number }>) ?? [],
+            createdAt: o.createdAt.toISOString(),
+          }));
+        },
+      },
     };
 
     const { actions, newCtx } = await engine.process(message, ctx);

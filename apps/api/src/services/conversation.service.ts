@@ -217,6 +217,74 @@ export const conversationService = {
       data: {
         ...(storedContext?.data ?? {}),
         disabledFlows,
+        // Injected data-access callbacks — not persisted to DB
+        fetchProducts: async (query: string, tid: string) => {
+          const where = {
+            tenantId: tid,
+            status: 'active' as const,
+            inventory: { gt: 0 },
+            ...(query && query !== 'browse_all'
+              ? {
+                  OR: [
+                    { name: { contains: query, mode: 'insensitive' as const } },
+                    { description: { contains: query, mode: 'insensitive' as const } },
+                    { categories: { has: query } },
+                  ],
+                }
+              : {}),
+          };
+          const products = await prisma.product.findMany({
+            where,
+            take: 10,
+            orderBy: { updatedAt: 'desc' },
+            select: { id: true, name: true, sku: true, price: true, currency: true, inventory: true, description: true, images: true, categories: true },
+          });
+          return products.map((p) => ({
+            productId: p.id,
+            sku: p.sku,
+            name: p.name,
+            price: Number(p.price),
+            currency: p.currency,
+            inventory: p.inventory,
+            description: p.description ?? undefined,
+            imageUrl: ((p.images as Array<{ url: string }> | null)?.[0]?.url) ?? undefined,
+            categories: p.categories as string[] | undefined,
+          }));
+        },
+        fetchOrders: async (query: string, tid: string, customerPhone: string) => {
+          const customerRecord = await prisma.customer.findFirst({ where: { tenantId: tid, phone: customerPhone } });
+          if (!customerRecord) return [];
+
+          const isOrderRef = /^[A-Z0-9]{6,12}$/i.test(query.trim());
+          const orders = await prisma.order.findMany({
+            where: {
+              tenantId: tid,
+              customerId: customerRecord.id,
+              ...(query && isOrderRef
+                ? {
+                    OR: [
+                      { externalId: { contains: query, mode: 'insensitive' as const } },
+                      { id: { startsWith: query.toLowerCase() } },
+                    ],
+                  }
+                : {}),
+            },
+            orderBy: { createdAt: 'desc' },
+            take: 5,
+            select: {
+              id: true, externalId: true, status: true, paymentStatus: true,
+              fulfillmentStatus: true, total: true, currency: true,
+              createdAt: true, shippingAddress: true, items: true,
+            },
+          });
+          return orders.map((o) => ({
+            ...o,
+            total: String(o.total),
+            shippingAddress: o.shippingAddress as Record<string, unknown> | null,
+            items: (o.items as Array<{ name: string; qty?: number; quantity?: number; price: number }>) ?? [],
+            createdAt: o.createdAt.toISOString(),
+          }));
+        },
       },
     };
 
