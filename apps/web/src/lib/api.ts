@@ -187,6 +187,91 @@ export interface ConversationListItem extends Omit<Conversation, 'messages'> {
   messages: ConversationMessage[];
 }
 
+// ─── Settings ─────────────────────────────────────────────────────────────────
+
+export interface TenantSettings {
+  botEnabled?: boolean;
+  greetingMessage?: string;
+  currency?: string;
+  timezone?: string;
+  workingHoursEnabled?: boolean;
+  workingHoursStart?: string;
+  workingHoursEnd?: string;
+  offlineMessage?: string;
+  webhookVerifyToken?: string;
+  whatsappAccessToken?: string;
+}
+
+export interface TenantProfile {
+  id: string;
+  name: string;
+  phone: string;
+  email: string | null;
+  plan: string;
+  isActive: boolean;
+  whatsappBusinessId: string | null;
+  whatsappPhoneNumberId: string | null;
+  settings: TenantSettings;
+  createdAt: string;
+}
+
+export function useSettings() {
+  return useQuery({
+    queryKey: ['settings'],
+    queryFn: async () => {
+      const res = await api.get<{ success: boolean; data: TenantProfile }>('/api/v1/settings');
+      return res.data.data;
+    },
+  });
+}
+
+export function useUpdateProfile() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (data: { name?: string; email?: string | null }) => {
+      const res = await api.patch('/api/v1/settings/profile', data);
+      return res.data;
+    },
+    onSuccess: () => void qc.invalidateQueries({ queryKey: ['settings'] }),
+  });
+}
+
+export function useUpdatePassword() {
+  return useMutation({
+    mutationFn: async (data: { currentPassword: string; newPassword: string }) => {
+      const res = await api.patch('/api/v1/settings/password', data);
+      return res.data;
+    },
+  });
+}
+
+export function useUpdateWhatsApp() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (data: {
+      whatsappBusinessId?: string;
+      whatsappPhoneNumberId?: string;
+      whatsappAccessToken?: string;
+      webhookVerifyToken?: string;
+    }) => {
+      const res = await api.patch('/api/v1/settings/whatsapp', data);
+      return res.data;
+    },
+    onSuccess: () => void qc.invalidateQueries({ queryKey: ['settings'] }),
+  });
+}
+
+export function useUpdateBotSettings() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (data: TenantSettings) => {
+      const res = await api.patch('/api/v1/settings/bot', data);
+      return res.data;
+    },
+    onSuccess: () => void qc.invalidateQueries({ queryKey: ['settings'] }),
+  });
+}
+
 export function useConversations(params: { page?: number; limit?: number; status?: string } = {}) {
   return useQuery({
     queryKey: ['conversations', params],

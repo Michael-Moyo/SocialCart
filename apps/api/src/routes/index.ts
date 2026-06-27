@@ -7,6 +7,7 @@ import orderRoutes from './orders';
 import customerRoutes from './customers';
 import webhookRoutes from './webhooks';
 import conversationRoutes from './conversations';
+import settingsRoutes from './settings';
 
 const router = Router();
 
@@ -20,5 +21,6 @@ router.use('/products', authMiddleware, productRoutes);
 router.use('/orders', authMiddleware, orderRoutes);
 router.use('/customers', authMiddleware, customerRoutes);
 router.use('/conversations', authMiddleware, conversationRoutes);
+router.use('/settings', authMiddleware, settingsRoutes);
 
 export default router;
