@@ -23,31 +23,52 @@ function emptyCtx(tenantId: string, phone: string, conversationId: string): Flow
   };
 }
 
-function actionsToReply(actions: FlowAction[]): { text: string; buttons?: Array<{ id: string; title: string }>; listRows?: Array<{ id: string; title: string; description?: string }> } | null {
-  let text = '';
-  let buttons: Array<{ id: string; title: string }> | undefined;
-  let listRows: Array<{ id: string; title: string; description?: string }> | undefined;
+type ReplyMessage = {
+  text: string;
+  buttons?: Array<{ id: string; title: string }>;
+  listRows?: Array<{ id: string; title: string; description?: string }>;
+};
+
+function actionsToReplies(actions: FlowAction[]): ReplyMessage[] {
+  const replies: ReplyMessage[] = [];
 
   for (const action of actions) {
     if (action.type === 'send_text') {
-      text = action.text;
+      replies.push({ text: action.text });
     } else if (action.type === 'send_buttons') {
-      text = action.body;
-      buttons = action.buttons;
+      replies.push({ text: action.body, buttons: action.buttons });
     } else if (action.type === 'send_list') {
-      text = action.body;
-      listRows = action.sections.flatMap((s) => s.rows);
+      replies.push({ text: action.body, listRows: action.sections.flatMap((s) => s.rows) });
     }
   }
 
-  if (!text) return null;
-  return { text, ...(buttons ? { buttons } : {}), ...(listRows ? { listRows } : {}) };
+  return replies;
 }
 
 const messageSchema = z.object({
   tenantId: z.string().min(1),
   phone: z.string().min(7),
   message: z.string().min(1),
+});
+
+router.get('/history', async (req: Request, res: Response) => {
+  const { tenantId, phone } = req.query as { tenantId?: string; phone?: string };
+  if (!tenantId || !phone) { res.json({ success: true, messages: [] }); return; }
+  try {
+    const conversation = await prisma.conversation.findFirst({
+      where: { tenantId, waNumber: phone, status: { not: 'RESOLVED' } },
+    });
+    if (!conversation) { res.json({ success: true, messages: [] }); return; }
+    const msgs = await prisma.message.findMany({
+      where: { conversationId: conversation.id },
+      orderBy: { createdAt: 'asc' },
+      take: 50,
+      select: { id: true, direction: true, type: true, content: true, sentAt: true, createdAt: true },
+    });
+    res.json({ success: true, messages: msgs });
+  } catch {
+    res.json({ success: true, messages: [] });
+  }
 });
 
 router.post('/message', validate(messageSchema), async (req: Request, res: Response) => {
@@ -144,15 +165,15 @@ router.post('/message', validate(messageSchema), async (req: Request, res: Respo
       },
     });
 
-    const reply = actionsToReply(actions);
+    const replies = actionsToReplies(actions);
 
-    // Save bot reply
-    if (reply) {
+    // Save each bot reply message
+    for (const reply of replies) {
       await prisma.message.create({
         data: {
           conversationId: conversation.id,
           direction: 'OUTBOUND',
-          type: reply.buttons ? 'interactive' : 'text',
+          type: reply.buttons ? 'interactive' : reply.listRows ? 'interactive' : 'text',
           content: { text: reply.text, buttons: reply.buttons, listRows: reply.listRows },
           sentAt: new Date(),
           status: 'SENT',
@@ -160,7 +181,7 @@ router.post('/message', validate(messageSchema), async (req: Request, res: Respo
       });
     }
 
-    res.json({ success: true, reply });
+    res.json({ success: true, replies });
   } catch (err) {
     console.error('[Simulator]', err);
     res.status(500).json({ success: false, error: 'Internal error' });

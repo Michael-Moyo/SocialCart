@@ -12,7 +12,7 @@ export interface Message {
 
 interface ChatBubbleProps {
   message: Message;
-  onButtonClick?: (id: string) => void;
+  onButtonClick?: (id: string, title: string) => void;
 }
 
 function formatTime(iso: string): string {
@@ -38,7 +38,7 @@ export function ChatBubble({ message, onButtonClick }: ChatBubbleProps) {
             {message.buttons.map((btn) => (
               <button
                 key={btn.id}
-                onClick={() => onButtonClick?.(btn.id)}
+                onClick={() => onButtonClick?.(btn.id, btn.title)}
                 className="w-full border border-[#25D366] text-[#25D366] text-sm rounded-lg px-3 py-1.5 text-center hover:bg-[#25D366] hover:text-white transition-colors"
               >
                 {btn.title}
@@ -52,7 +52,7 @@ export function ChatBubble({ message, onButtonClick }: ChatBubbleProps) {
             {message.listRows.map((row) => (
               <button
                 key={row.id}
-                onClick={() => onButtonClick?.(row.id)}
+                onClick={() => onButtonClick?.(row.id, row.title)}
                 className="w-full text-left border border-slate-200 rounded-lg px-3 py-2 hover:border-[#25D366] transition-colors"
               >
                 <div className="text-sm font-medium text-[#0F172A]">{row.title}</div>

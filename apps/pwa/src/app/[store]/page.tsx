@@ -22,6 +22,28 @@ function getOrCreatePhone(): string {
 
 interface StoreInfo { id: string; name: string; logoUrl: string | null; tagline: string | null; primaryColor: string }
 
+type BotReply = { text: string; buttons?: Message['buttons']; listRows?: Message['listRows'] };
+
+type HistoryMessage = {
+  id: string;
+  direction: string;
+  type: string;
+  content: Record<string, unknown>;
+  sentAt: string | null;
+  createdAt: string;
+};
+
+function historyToMessages(msgs: HistoryMessage[]): Message[] {
+  return msgs.map((m) => ({
+    id: m.id,
+    text: (m.content['text'] as string | undefined) ?? '',
+    direction: (m.direction === 'OUTBOUND' ? 'inbound' : 'outbound') as 'inbound' | 'outbound',
+    sentAt: m.sentAt ?? m.createdAt,
+    buttons: m.content['buttons'] as Message['buttons'] | undefined,
+    listRows: m.content['listRows'] as Message['listRows'] | undefined,
+  })).filter((m) => m.text);
+}
+
 const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3001';
 
 export default function StorePage({ params }: StorePageProps) {
@@ -31,6 +53,7 @@ export default function StorePage({ params }: StorePageProps) {
   const [phone, setPhone] = useState('');
   const [storeInfo, setStoreInfo] = useState<StoreInfo | null>(null);
   const [notFound, setNotFound] = useState(false);
+  const [historyLoaded, setHistoryLoaded] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -43,6 +66,19 @@ export default function StorePage({ params }: StorePageProps) {
       .catch(() => setNotFound(true));
   }, [store]);
 
+  // Load chat history once phone is known
+  useEffect(() => {
+    if (!phone || historyLoaded) return;
+    axios.get<{ success: boolean; messages: HistoryMessage[] }>(
+      `/api/message?tenantId=${encodeURIComponent(store)}&phone=${encodeURIComponent(phone)}`
+    ).then((r) => {
+      if (r.data.messages?.length) {
+        setMessages(historyToMessages(r.data.messages));
+      }
+    }).catch(() => null)
+      .finally(() => setHistoryLoaded(true));
+  }, [phone, store, historyLoaded]);
+
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
@@ -51,12 +87,12 @@ export default function StorePage({ params }: StorePageProps) {
     setMessages((prev) => [...prev, msg]);
   }, []);
 
-  async function handleSend(text: string) {
+  async function handleSend(text: string, displayText?: string) {
     if (!phone || sending) return;
 
     const userMsg: Message = {
       id: `user_${Date.now()}`,
-      text,
+      text: displayText ?? text,
       direction: 'outbound',
       sentAt: new Date().toISOString(),
     };
@@ -64,21 +100,22 @@ export default function StorePage({ params }: StorePageProps) {
     setSending(true);
 
     try {
-      const res = await axios.post<{ success: boolean; reply?: { text: string; buttons?: Message['buttons']; listRows?: Message['listRows'] } }>(
+      const res = await axios.post<{ success: boolean; replies?: BotReply[] }>(
         `/api/message`,
         { phone, message: text, tenantId: store }
       );
 
-      if (res.data.reply) {
-        const storeMsg: Message = {
-          id: `store_${Date.now()}`,
-          text: res.data.reply.text,
+      const replies = res.data.replies ?? [];
+      for (const reply of replies) {
+        if (!reply.text) continue;
+        appendMessage({
+          id: `store_${Date.now()}_${Math.random()}`,
+          text: reply.text,
           direction: 'inbound',
           sentAt: new Date().toISOString(),
-          buttons: res.data.reply.buttons,
-          listRows: res.data.reply.listRows,
-        };
-        appendMessage(storeMsg);
+          buttons: reply.buttons,
+          listRows: reply.listRows,
+        });
       }
     } catch {
       appendMessage({
@@ -92,8 +129,9 @@ export default function StorePage({ params }: StorePageProps) {
     }
   }
 
-  function handleButtonClick(id: string) {
-    handleSend(id);
+  function handleButtonClick(id: string, title: string) {
+    // Send the raw ID to the bot but show the human-readable title in chat
+    void handleSend(id, title);
   }
 
   if (notFound) {
@@ -139,7 +177,7 @@ export default function StorePage({ params }: StorePageProps) {
 
       {/* Chat area */}
       <div className="flex-1 overflow-y-auto px-3 py-4">
-        {messages.length === 0 && (
+        {messages.length === 0 && historyLoaded && (
           <div className="flex justify-center">
             <div className="bg-[#FFF9C4] rounded-lg px-4 py-2 text-xs text-[#0F172A] shadow-sm max-w-xs text-center">
               Messages are end-to-end experience powered by SocialCart
@@ -164,7 +202,7 @@ export default function StorePage({ params }: StorePageProps) {
       </div>
 
       {/* Input */}
-      <ChatInput onSend={handleSend} disabled={sending || !phone} />
+      <ChatInput onSend={(text) => handleSend(text)} disabled={sending || !phone} />
     </div>
   );
 }
