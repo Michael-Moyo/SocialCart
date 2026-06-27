@@ -1,7 +1,8 @@
 import { Router, Request, Response } from 'express';
 import { integrationManager, PlatformType } from '@socialcart/integrations';
-import { parseWebhookPayload } from '@socialcart/whatsapp';
+import { parseWebhookPayload, extractMessageText, extractInteractiveReplyId } from '@socialcart/whatsapp';
 import prisma from '../lib/prisma';
+import { conversationService } from '../services/conversation.service';
 
 const router = Router();
 
@@ -92,29 +93,23 @@ router.post('/whatsapp/webhook', async (req: Request, res: Response) => {
 async function processWhatsAppEvent(event: ReturnType<typeof parseWebhookPayload>[number]): Promise<void> {
   if (!event.from) return;
 
-  // Find conversation by phone number
-  const conversation = await prisma.conversation.findFirst({
-    where: { waNumber: event.from },
-    include: { customer: true },
-  });
-
   if (event.type.startsWith('message.')) {
-    // Save inbound message
-    if (conversation) {
-      await prisma.message.create({
-        data: {
-          conversationId: conversation.id,
-          direction: 'INBOUND',
-          type: event.message?.type ?? 'text',
-          content: event.message ?? {},
-          waMessageId: event.messageId,
-          sentAt: event.timestamp,
-          status: 'DELIVERED',
-        },
-      });
-    }
+    const messageText =
+      extractInteractiveReplyId(event.message) ??
+      extractMessageText(event.message) ??
+      '';
+
+    // Derive tenantId from the phone number ID stored in the webhook metadata
+    // For now fall back to env var; production should look up by phoneNumberId
+    const tenantId = process.env['DEFAULT_TENANT_ID'] ?? 'default';
+
+    await conversationService.handleIncoming(
+      tenantId,
+      event.from,
+      messageText,
+      event.messageId
+    );
   } else if (event.type.startsWith('status.')) {
-    // Update message delivery status
     if (event.messageId) {
       const status = event.type.split('.')[1]?.toUpperCase() as 'SENT' | 'DELIVERED' | 'READ' | 'FAILED';
       await prisma.message.updateMany({
