@@ -16,6 +16,7 @@ import notificationRoutes from './notifications';
 import paymentRoutes from './payments';
 import analyticsRoutes from './analytics';
 import sseRoutes from './sse';
+import simulatorRoutes from './simulator';
 
 const router = Router();
 
@@ -38,5 +39,6 @@ router.use('/payments', paymentRoutes);       // mixed: some routes have own aut
 router.use('/analytics', authMiddleware, analyticsRoutes);
 router.use('/sse', sseRoutes);               // SSE stream (auth handled inside)
 router.use('/superadmin', superAdminRoutes); // has own auth middleware internally
+router.use('/simulator', simulatorRoutes);  // public — web store demo
 
 export default router;

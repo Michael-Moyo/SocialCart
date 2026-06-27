@@ -23,7 +23,7 @@ function buildEngine(): FlowEngine {
   return engine;
 }
 
-const engine = buildEngine();
+export const engine = buildEngine();
 
 export async function getWhatsAppClient(tenantId: string): Promise<WhatsAppClient> {
   const tenant = await prisma.tenant.findUnique({
