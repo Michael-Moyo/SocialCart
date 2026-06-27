@@ -1,7 +1,8 @@
 'use client';
 
 import { useState, useCallback, useRef, useEffect } from 'react';
-import { MessageSquare, User, CheckCircle, Clock, Search, RefreshCw, ChevronRight, Wifi, WifiOff, Send, UserPlus } from 'lucide-react';
+import Link from 'next/link';
+import { MessageSquare, User, CheckCircle, Clock, Search, RefreshCw, ChevronRight, Wifi, WifiOff, Send, UserPlus, ExternalLink } from 'lucide-react';
 import { Header } from '@/components/layout/header';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -213,9 +214,20 @@ function ConversationThread({ id }: { id: string }) {
             {(convo.customer?.name ?? convo.waNumber)[0]?.toUpperCase()}
           </div>
           <div>
-            <p className="font-semibold text-gray-900 text-sm">
-              {convo.customer?.name ?? 'Unknown'}
-            </p>
+            <div className="flex items-center gap-1.5">
+              <p className="font-semibold text-gray-900 text-sm">
+                {convo.customer?.name ?? 'Unknown'}
+              </p>
+              {convo.customer?.id && (
+                <Link
+                  href={`/dashboard/customers/${convo.customer.id}`}
+                  className="text-gray-400 hover:text-[#25D366] transition-colors"
+                  title="View customer profile"
+                >
+                  <ExternalLink className="h-3.5 w-3.5" />
+                </Link>
+              )}
+            </div>
             <p className="text-xs text-gray-400">{formatPhone(convo.waNumber)}</p>
           </div>
         </div>
@@ -312,6 +324,14 @@ export default function ConversationsPage() {
     }, [queryClient]),
     'conversation:status': useCallback(() => {
       void queryClient.invalidateQueries({ queryKey: ['conversations'] });
+      setSseConnected(true);
+    }, [queryClient]),
+    'conversation:assigned': useCallback((data: unknown) => {
+      const d = data as { conversationId: string };
+      void queryClient.invalidateQueries({ queryKey: ['conversations'] });
+      if (d.conversationId) {
+        void queryClient.invalidateQueries({ queryKey: ['conversation', d.conversationId] });
+      }
       setSseConnected(true);
     }, [queryClient]),
   });

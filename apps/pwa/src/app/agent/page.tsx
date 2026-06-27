@@ -1,7 +1,8 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useCallback } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { formatDistanceToNow } from 'date-fns';
 import { useConversations, useAgentSSE, getMessageText, type ConversationSummary } from '@/lib/agent-api';
 
@@ -22,8 +23,20 @@ const FILTER_LABELS: { key: Filter; label: string }[] = [
 ];
 
 export default function AgentConversationsPage() {
+  const router = useRouter();
   const [filter, setFilter] = useState<Filter>('all');
-  useAgentSSE();
+  const [assignedBanner, setAssignedBanner] = useState<{ conversationId: string } | null>(null);
+
+  const handleAssigned = useCallback((payload: { conversationId: string }) => {
+    setAssignedBanner(payload);
+    setTimeout(() => setAssignedBanner(null), 6000);
+    // Vibrate on supported devices
+    if (typeof navigator !== 'undefined' && navigator.vibrate) {
+      navigator.vibrate([100, 50, 100]);
+    }
+  }, []);
+
+  useAgentSSE(undefined, handleAssigned);
   const [search, setSearch] = useState('');
   const { data: conversations = [], isLoading } = useConversations(filter);
 
@@ -37,6 +50,31 @@ export default function AgentConversationsPage() {
 
   return (
     <div className="flex flex-col h-full bg-white">
+      {/* Assignment banner */}
+      {assignedBanner && (
+        <div
+          className="bg-[#25D366] text-white px-4 py-3 flex items-center justify-between gap-3 shadow-lg z-50 animate-in slide-in-from-top duration-300"
+          onClick={() => {
+            router.push(`/agent/conversation/${assignedBanner.conversationId}`);
+            setAssignedBanner(null);
+          }}
+        >
+          <div className="flex items-center gap-2.5">
+            <span className="text-lg">💬</span>
+            <div>
+              <p className="text-sm font-semibold">New conversation assigned to you</p>
+              <p className="text-xs opacity-80">Tap to open</p>
+            </div>
+          </div>
+          <button
+            onClick={(e) => { e.stopPropagation(); setAssignedBanner(null); }}
+            className="text-white/70 hover:text-white text-xl leading-none"
+          >
+            ×
+          </button>
+        </div>
+      )}
+
       {/* Header */}
       <div className="bg-[#075E54] pt-safe px-4 pb-3">
         <div className="flex items-center justify-between mb-3">

@@ -9,6 +9,7 @@ import {
   useResolve,
   useTakeOver,
   useAgentSSE,
+  useCustomerOrders,
   getMessageText,
   getAgentProfile,
   type Message,
@@ -91,14 +92,14 @@ function DateSeparator({ date }: { date: string }) {
 export default function ConversationPage({ params }: PageProps) {
   const router = useRouter();
   const { id } = params;
+  const [text, setText] = useState('');
+  const [showInfo, setShowInfo] = useState(false);
   const { data: convo, isLoading } = useConversation(id);
   const reply = useReply(id);
   const resolve = useResolve(id);
   const takeOver = useTakeOver(id);
   useAgentSSE(id);
-
-  const [text, setText] = useState('');
-  const [showInfo, setShowInfo] = useState(false);
+  const { data: customerOrders = [] } = useCustomerOrders(showInfo ? convo?.customer.id : undefined);
   const bottomRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const profile = getAgentProfile();
@@ -226,6 +227,37 @@ export default function ConversationPage({ params }: PageProps) {
             <div className="flex justify-between">
               <span className="text-gray-400">Current flow</span>
               <span className="font-medium text-gray-700 font-mono text-xs">{convo.currentFlow}</span>
+            </div>
+          )}
+          {customerOrders.length > 0 && (
+            <div className="mt-2 pt-2 border-t border-gray-100">
+              <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Recent orders</p>
+              <div className="space-y-1.5">
+                {customerOrders.slice(0, 3).map((order) => (
+                  <div key={order.id} className="bg-gray-50 rounded-lg px-3 py-2 flex items-center justify-between gap-2">
+                    <div className="min-w-0">
+                      <p className="text-xs font-medium text-gray-800 truncate">
+                        {order.items.map((i) => `${i.qty}× ${i.name}`).join(', ') || 'Order'}
+                      </p>
+                      <p className="text-[11px] text-gray-400 mt-0.5">
+                        {new Date(order.createdAt).toLocaleDateString()}
+                      </p>
+                    </div>
+                    <div className="text-right shrink-0">
+                      <p className="text-xs font-semibold text-gray-900">
+                        ₦{parseFloat(order.total).toLocaleString()}
+                      </p>
+                      <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded-full ${
+                        order.status === 'PAID' ? 'bg-green-100 text-green-700' :
+                        order.status === 'PENDING' ? 'bg-yellow-100 text-yellow-700' :
+                        'bg-gray-100 text-gray-500'
+                      }`}>
+                        {order.status}
+                      </span>
+                    </div>
+                  </div>
+                ))}
+              </div>
             </div>
           )}
         </div>

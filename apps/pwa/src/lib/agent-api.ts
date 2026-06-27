@@ -111,10 +111,15 @@ export function useConversation(id: string) {
 }
 
 // SSE hook for the agent PWA — invalidates queries on real-time events
-export function useAgentSSE(activeConversationId?: string) {
+export function useAgentSSE(
+  activeConversationId?: string,
+  onAssigned?: (payload: { conversationId: string; agentName?: string }) => void,
+) {
   const qc = useQueryClient();
   const activeRef = useRef(activeConversationId);
+  const onAssignedRef = useRef(onAssigned);
   activeRef.current = activeConversationId;
+  onAssignedRef.current = onAssigned;
 
   useEffect(() => {
     const token = typeof window !== 'undefined' ? localStorage.getItem('agent_token') : null;
@@ -146,6 +151,22 @@ export function useAgentSSE(activeConversationId?: string) {
         void qc.invalidateQueries({ queryKey: ['agent-conversations'] });
       });
 
+      es.addEventListener('conversation:assigned', (e: MessageEvent) => {
+        try {
+          const data = JSON.parse(e.data as string) as {
+            conversationId: string;
+            agentId: string;
+            agentName?: string;
+          };
+          void qc.invalidateQueries({ queryKey: ['agent-conversations'] });
+          // Only notify if assigned to this agent
+          const profile = getAgentProfile();
+          if (profile && data.agentId === profile.id) {
+            onAssignedRef.current?.({ conversationId: data.conversationId, agentName: data.agentName });
+          }
+        } catch {}
+      });
+
       es.onerror = () => {
         es?.close();
         if (!unmounted) {
@@ -163,6 +184,29 @@ export function useAgentSSE(activeConversationId?: string) {
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+}
+
+export interface CustomerOrder {
+  id: string;
+  status: string;
+  total: string;
+  createdAt: string;
+  items: Array<{ name: string; qty: number }>;
+}
+
+export function useCustomerOrders(customerId: string | undefined) {
+  return useQuery({
+    queryKey: ['agent-customer-orders', customerId],
+    queryFn: async () => {
+      if (!customerId) return [];
+      const res = await agentApi.get<{ success: boolean; data: { orders: CustomerOrder[] } }>(
+        `/api/v1/customers/${customerId}`
+      );
+      return res.data.data.orders ?? [];
+    },
+    enabled: Boolean(customerId),
+    staleTime: 30_000,
+  });
 }
 
 export function useReply(conversationId: string) {

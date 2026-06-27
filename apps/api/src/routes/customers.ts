@@ -60,7 +60,11 @@ router.get('/:id', async (req, res, next) => {
     const customer = await prisma.customer.findFirst({
       where: { id: req.params['id']!, tenantId: req.tenantId! },
       include: {
-        orders: { orderBy: { createdAt: 'desc' }, take: 10 },
+        orders: {
+          orderBy: { createdAt: 'desc' },
+          take: 10,
+          select: { id: true, status: true, total: true, items: true, createdAt: true },
+        },
         loyaltyAccount: true,
       },
     });
