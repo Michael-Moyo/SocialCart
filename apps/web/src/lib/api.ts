@@ -504,3 +504,115 @@ export function useDeleteIntegration() {
     },
   });
 }
+
+// ─── Analytics ────────────────────────────────────────────────────────────────
+
+export interface OverviewMetric { value: number; change: number }
+export interface OverviewData {
+  revenue: OverviewMetric;
+  orders: OverviewMetric;
+  conversations: OverviewMetric;
+  newCustomers: OverviewMetric;
+}
+export interface RevenuePoint { date: string; revenue: number }
+export interface FunnelStage { stage: string; count: number }
+export interface TopProduct { sku: string; name: string; revenue: number; units: number }
+export interface PaymentStats {
+  total: number; paid: number; expired: number; pending: number;
+  conversionRate: number; revenueByProvider: Record<string, number>;
+}
+
+export function useAnalyticsOverview(days = 30) {
+  return useQuery({
+    queryKey: ['analytics-overview', days],
+    queryFn: async () => {
+      const res = await api.get<{ success: boolean; data: OverviewData }>(`/api/v1/analytics/overview?days=${days}`);
+      return res.data.data;
+    },
+    refetchInterval: 60000,
+  });
+}
+
+export function useRevenueChart(days = 30) {
+  return useQuery({
+    queryKey: ['analytics-revenue', days],
+    queryFn: async () => {
+      const res = await api.get<{ success: boolean; data: RevenuePoint[] }>(`/api/v1/analytics/revenue-chart?days=${days}`);
+      return res.data.data;
+    },
+    refetchInterval: 60000,
+  });
+}
+
+export function useConversionFunnel() {
+  return useQuery({
+    queryKey: ['analytics-funnel'],
+    queryFn: async () => {
+      const res = await api.get<{ success: boolean; data: FunnelStage[] }>('/api/v1/analytics/conversion-funnel');
+      return res.data.data;
+    },
+    refetchInterval: 60000,
+  });
+}
+
+export function useTopProducts() {
+  return useQuery({
+    queryKey: ['analytics-products'],
+    queryFn: async () => {
+      const res = await api.get<{ success: boolean; data: TopProduct[] }>('/api/v1/analytics/top-products');
+      return res.data.data;
+    },
+    refetchInterval: 60000,
+  });
+}
+
+export function usePaymentStats() {
+  return useQuery({
+    queryKey: ['analytics-payments'],
+    queryFn: async () => {
+      const res = await api.get<{ success: boolean; data: PaymentStats }>('/api/v1/analytics/payment-stats');
+      return res.data.data;
+    },
+    refetchInterval: 60000,
+  });
+}
+
+// ─── Payments ─────────────────────────────────────────────────────────────────
+
+export interface PaymentLink {
+  id: string;
+  customerId: string;
+  orderId: string | null;
+  provider: string;
+  externalRef: string | null;
+  amount: string;
+  currency: string;
+  url: string;
+  status: 'PENDING' | 'PAID' | 'EXPIRED' | 'CANCELLED';
+  paidAt: string | null;
+  createdAt: string;
+  customer: { id: string; name: string; phone: string };
+}
+
+export function usePaymentLinks(status?: string) {
+  return useQuery({
+    queryKey: ['payment-links', status],
+    queryFn: async () => {
+      const res = await api.get<{ success: boolean; data: PaymentLink[] }>(
+        `/api/v1/payments/links${status ? `?status=${status}` : ''}`
+      );
+      return res.data.data;
+    },
+  });
+}
+
+export function useCreatePaymentLink() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (data: { customerId: string; amount: number; currency: string; description: string; orderId?: string }) => {
+      const res = await api.post<{ success: boolean; data: { id: string; url: string; reference: string } }>('/api/v1/payments/links', data);
+      return res.data.data;
+    },
+    onSuccess: () => void qc.invalidateQueries({ queryKey: ['payment-links'] }),
+  });
+}

@@ -13,6 +13,8 @@ import loyaltyRoutes from './loyalty';
 import teamRoutes from './team';
 import superAdminRoutes from './superadmin';
 import notificationRoutes from './notifications';
+import paymentRoutes from './payments';
+import analyticsRoutes from './analytics';
 
 const router = Router();
 
@@ -31,6 +33,8 @@ router.use('/campaigns', authMiddleware, campaignRoutes);
 router.use('/loyalty', authMiddleware, loyaltyRoutes);
 router.use('/team', authMiddleware, teamRoutes);
 router.use('/notifications', authMiddleware, notificationRoutes);
+router.use('/payments', paymentRoutes);       // mixed: some routes have own authMiddleware, webhooks are public
+router.use('/analytics', authMiddleware, analyticsRoutes);
 router.use('/superadmin', superAdminRoutes); // has own auth middleware internally
 
 export default router;

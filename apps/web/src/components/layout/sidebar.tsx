@@ -14,6 +14,8 @@ import {
   Settings,
   Zap,
   UsersRound,
+  BarChart2,
+  CreditCard,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -26,6 +28,8 @@ const navItems = [
   { href: '/dashboard/conversations', label: 'Conversations', icon: MessageSquare },
   { href: '/dashboard/campaigns', label: 'Campaigns', icon: Megaphone },
   { href: '/dashboard/loyalty', label: 'Loyalty', icon: Gift },
+  { href: '/dashboard/analytics', label: 'Analytics', icon: BarChart2 },
+  { href: '/dashboard/payments', label: 'Payments', icon: CreditCard },
   { href: '/dashboard/team', label: 'Team', icon: UsersRound },
   { href: '/dashboard/settings', label: 'Settings', icon: Settings },
 ];
