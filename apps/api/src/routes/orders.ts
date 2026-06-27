@@ -145,4 +145,46 @@ router.post('/', validate(createOrderSchema), async (req, res, next) => {
   }
 });
 
+// PATCH /api/v1/orders/:id — update status, tracking, notes
+const updateOrderSchema = z.object({
+  status: z.enum(['pending', 'confirmed', 'processing', 'shipped', 'delivered', 'cancelled', 'refunded']).optional(),
+  paymentStatus: z.enum(['unpaid', 'paid', 'refunded']).optional(),
+  trackingNumber: z.string().optional(),
+  notes: z.string().optional(),
+});
+
+router.patch('/:id', validate(updateOrderSchema), async (req, res, next) => {
+  try {
+    const { id } = req.params as { id: string };
+    const tenantId = req.tenantId!;
+    const data = req.body as z.infer<typeof updateOrderSchema>;
+
+    const order = await prisma.order.findFirst({ where: { id, tenantId } });
+    if (!order) {
+      res.status(404).json({ success: false, error: 'Order not found' });
+      return;
+    }
+
+    const updated = await prisma.order.update({
+      where: { id },
+      data: {
+        ...(data.status && { status: data.status }),
+        ...(data.paymentStatus && { paymentStatus: data.paymentStatus }),
+        ...(data.notes !== undefined && { notes: data.notes }),
+        ...(data.trackingNumber !== undefined && {
+          shippingAddress: {
+            ...(order.shippingAddress as Record<string, unknown> ?? {}),
+            trackingNumber: data.trackingNumber,
+          },
+        }),
+      },
+      include: { customer: true },
+    });
+
+    res.json({ success: true, data: updated });
+  } catch (err) {
+    next(err);
+  }
+});
+
 export default router;

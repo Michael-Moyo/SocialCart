@@ -24,6 +24,7 @@ import {
   useUpdatePassword,
   useUpdateWhatsApp,
   useUpdateBotSettings,
+  useUpdatePaymentSettings,
   type TenantSettings,
 } from '@/lib/api';
 import { cn } from '@/lib/utils';
@@ -154,6 +155,7 @@ const TABS = [
   { id: 'profile', label: 'Profile', icon: User },
   { id: 'whatsapp', label: 'WhatsApp', icon: MessageSquare },
   { id: 'bot', label: 'Bot Config', icon: Bot },
+  { id: 'payments', label: 'Payments', icon: CreditCard },
   { id: 'security', label: 'Security', icon: Lock },
   { id: 'plan', label: 'Plan & Billing', icon: CreditCard },
 ] as const;
@@ -646,6 +648,227 @@ function PlanSection() {
   );
 }
 
+// ─── Payments section ─────────────────────────────────────────────────────────
+
+type PaymentProvider = 'PAYSTACK' | 'FLUTTERWAVE' | 'MANUAL';
+
+const PROVIDERS: { id: PaymentProvider; label: string; description: string }[] = [
+  { id: 'PAYSTACK', label: 'Paystack', description: 'Accept cards and bank transfers (Nigeria, Ghana, Kenya, South Africa)' },
+  { id: 'FLUTTERWAVE', label: 'Flutterwave', description: 'Accept payments across 30+ African countries' },
+  { id: 'MANUAL', label: 'Manual', description: 'Collect payment offline — bot sends instructions, you confirm manually' },
+];
+
+function PaymentsSection() {
+  const { data: settings } = useSettings();
+  const update = useUpdatePaymentSettings();
+  const s = (settings?.settings ?? {}) as Record<string, unknown>;
+
+  const [provider, setProvider] = useState<PaymentProvider>('MANUAL');
+  const [paystackKey, setPaystackKey] = useState('');
+  const [paystackPub, setPaystackPub] = useState('');
+  const [flutterwaveKey, setFlutterwaveKey] = useState('');
+  const [flutterPub, setFlutterPub] = useState('');
+  const [flutterHash, setFlutterHash] = useState('');
+  const [currency, setCurrency] = useState('NGN');
+
+  // Sync provider+currency from loaded settings
+  useEffect(() => {
+    if (s['provider']) setProvider(s['provider'] as PaymentProvider);
+    if (s['currency']) setCurrency(s['currency'] as string);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [settings]);
+  const [showKeys, setShowKeys] = useState(false);
+  const [saved, setSaved] = useState(false);
+
+  function handleSave() {
+    const payload: Parameters<typeof update.mutate>[0] = { provider, currency };
+    if (provider === 'PAYSTACK') {
+      if (paystackKey) payload.paystackSecretKey = paystackKey;
+      if (paystackPub) payload.paystackPublicKey = paystackPub;
+    }
+    if (provider === 'FLUTTERWAVE') {
+      if (flutterwaveKey) payload.flutterwaveSecretKey = flutterwaveKey;
+      if (flutterPub) payload.flutterwavePublicKey = flutterPub;
+      if (flutterHash) payload.flutterwaveWebhookHash = flutterHash;
+    }
+    update.mutate(payload, {
+      onSuccess: () => { setSaved(true); setTimeout(() => setSaved(false), 2500); },
+    });
+  }
+
+  return (
+    <Section title="Payment Settings" description="Configure how customers pay for their WhatsApp orders">
+      {/* Provider picker */}
+      <div className="space-y-2">
+        <label className="block text-sm font-medium text-gray-700 mb-2">Payment Provider</label>
+        {PROVIDERS.map((p) => (
+          <button
+            key={p.id}
+            type="button"
+            onClick={() => setProvider(p.id)}
+            className={cn(
+              'w-full text-left p-4 rounded-xl border-2 transition-all',
+              provider === p.id
+                ? 'border-[#25D366] bg-[#25D366]/5'
+                : 'border-gray-200 bg-white hover:border-gray-300'
+            )}
+          >
+            <div className="flex items-center gap-3">
+              <div className={cn(
+                'w-4 h-4 rounded-full border-2 flex items-center justify-center flex-shrink-0',
+                provider === p.id ? 'border-[#25D366]' : 'border-gray-300'
+              )}>
+                {provider === p.id && <div className="w-2 h-2 rounded-full bg-[#25D366]" />}
+              </div>
+              <div>
+                <p className="text-sm font-semibold text-gray-900">{p.label}</p>
+                <p className="text-xs text-gray-500 mt-0.5">{p.description}</p>
+              </div>
+            </div>
+          </button>
+        ))}
+      </div>
+
+      {/* Currency */}
+      <div>
+        <label className="block text-sm font-medium text-gray-700 mb-1">Default Currency</label>
+        <select
+          value={currency}
+          onChange={(e) => setCurrency(e.target.value)}
+          className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#25D366]/30 focus:border-[#25D366]"
+        >
+          {['NGN', 'GHS', 'KES', 'ZAR', 'USD', 'GBP', 'EUR'].map((c) => (
+            <option key={c} value={c}>{c}</option>
+          ))}
+        </select>
+      </div>
+
+      {/* Provider-specific keys */}
+      {provider !== 'MANUAL' && (
+        <div className="space-y-3 p-4 bg-gray-50 rounded-xl border border-gray-200">
+          <div className="flex items-center justify-between">
+            <p className="text-sm font-medium text-gray-700">API Keys</p>
+            <button
+              type="button"
+              onClick={() => setShowKeys((s) => !s)}
+              className="flex items-center gap-1 text-xs text-gray-500 hover:text-gray-700"
+            >
+              {showKeys ? <><EyeOff className="h-3 w-3" /> Hide</> : <><Eye className="h-3 w-3" /> Show</>}
+            </button>
+          </div>
+
+          <div className="bg-blue-50 border border-blue-100 rounded-lg p-3">
+            <p className="text-xs text-blue-700">
+              Keys are stored encrypted. Leave a field blank to keep the existing value.
+            </p>
+          </div>
+
+          {provider === 'PAYSTACK' && (
+            <>
+              <div>
+                <label className="block text-xs font-medium text-gray-600 mb-1">Secret Key</label>
+                <input
+                  type={showKeys ? 'text' : 'password'}
+                  value={paystackKey}
+                  onChange={(e) => setPaystackKey(e.target.value)}
+                  placeholder="sk_live_..."
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-[#25D366]/30 focus:border-[#25D366]"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-600 mb-1">Public Key</label>
+                <input
+                  type={showKeys ? 'text' : 'password'}
+                  value={paystackPub}
+                  onChange={(e) => setPaystackPub(e.target.value)}
+                  placeholder="pk_live_..."
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-[#25D366]/30 focus:border-[#25D366]"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-600 mb-1">Webhook URL (add to Paystack dashboard)</label>
+                <div className="flex items-center gap-2">
+                  <code className="flex-1 text-xs bg-white border border-gray-200 rounded-lg px-3 py-2 text-gray-600 truncate">
+                    {typeof window !== 'undefined' ? `${window.location.origin.replace(':3000', ':3001')}/api/v1/payments/paystack/webhook` : '...'}
+                  </code>
+                  <button
+                    type="button"
+                    onClick={() => void navigator.clipboard.writeText(`${window.location.origin.replace(':3000', ':3001')}/api/v1/payments/paystack/webhook`)}
+                    className="p-2 text-gray-400 hover:text-gray-600 border border-gray-200 rounded-lg"
+                  >
+                    <Copy className="h-3.5 w-3.5" />
+                  </button>
+                </div>
+              </div>
+            </>
+          )}
+
+          {provider === 'FLUTTERWAVE' && (
+            <>
+              <div>
+                <label className="block text-xs font-medium text-gray-600 mb-1">Secret Key</label>
+                <input
+                  type={showKeys ? 'text' : 'password'}
+                  value={flutterwaveKey}
+                  onChange={(e) => setFlutterwaveKey(e.target.value)}
+                  placeholder="FLWSECK_TEST-..."
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-[#25D366]/30 focus:border-[#25D366]"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-600 mb-1">Public Key</label>
+                <input
+                  type={showKeys ? 'text' : 'password'}
+                  value={flutterPub}
+                  onChange={(e) => setFlutterPub(e.target.value)}
+                  placeholder="FLWPUBK_TEST-..."
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-[#25D366]/30 focus:border-[#25D366]"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-600 mb-1">Webhook Verification Hash</label>
+                <input
+                  type={showKeys ? 'text' : 'password'}
+                  value={flutterHash}
+                  onChange={(e) => setFlutterHash(e.target.value)}
+                  placeholder="Your secret hash"
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-[#25D366]/30 focus:border-[#25D366]"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-600 mb-1">Webhook URL</label>
+                <div className="flex items-center gap-2">
+                  <code className="flex-1 text-xs bg-white border border-gray-200 rounded-lg px-3 py-2 text-gray-600 truncate">
+                    {typeof window !== 'undefined' ? `${window.location.origin.replace(':3000', ':3001')}/api/v1/payments/flutterwave/webhook` : '...'}
+                  </code>
+                  <button
+                    type="button"
+                    onClick={() => void navigator.clipboard.writeText(`${window.location.origin.replace(':3000', ':3001')}/api/v1/payments/flutterwave/webhook`)}
+                    className="p-2 text-gray-400 hover:text-gray-600 border border-gray-200 rounded-lg"
+                  >
+                    <Copy className="h-3.5 w-3.5" />
+                  </button>
+                </div>
+              </div>
+            </>
+          )}
+        </div>
+      )}
+
+      <div className="flex items-center gap-3">
+        <Button onClick={handleSave} disabled={update.isPending} loading={update.isPending}>
+          Save Payment Settings
+        </Button>
+        {saved && (
+          <span className="flex items-center gap-1 text-sm text-[#25D366]">
+            <CheckCircle className="h-4 w-4" /> Saved
+          </span>
+        )}
+      </div>
+    </Section>
+  );
+}
+
 // ─── Main page ────────────────────────────────────────────────────────────────
 
 export default function SettingsPage() {
@@ -679,6 +902,7 @@ export default function SettingsPage() {
         {tab === 'profile' && <ProfileSection />}
         {tab === 'whatsapp' && <WhatsAppSection />}
         {tab === 'bot' && <BotSection />}
+        {tab === 'payments' && <PaymentsSection />}
         {tab === 'security' && <SecuritySection />}
         {tab === 'plan' && <PlanSection />}
       </div>

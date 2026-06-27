@@ -78,10 +78,19 @@ export interface Order {
   source: string | null;
   status: string;
   paymentStatus: string;
+  fulfillmentStatus?: string;
   total: string;
+  subtotal?: string;
+  tax?: string;
+  shipping?: string;
+  discount?: string;
   currency: string;
+  items: Array<{ sku?: string; name: string; qty: number; price: number }> | null;
+  shippingAddress: Record<string, unknown> | null;
+  notes?: string | null;
   customer: { id: string; name: string; phone: string; email: string | null };
   createdAt: string;
+  updatedAt: string;
 }
 
 export interface PaginatedResponse<T> {
@@ -131,6 +140,31 @@ export function useProducts(params: { page?: number; limit?: number; search?: st
         { params }
       );
       return res.data;
+    },
+  });
+}
+
+export function useOrderDetail(id: string) {
+  return useQuery({
+    queryKey: ['order', id],
+    queryFn: async () => {
+      const res = await api.get<{ success: boolean; data: Order }>(`/api/v1/orders/${id}`);
+      return res.data.data;
+    },
+    enabled: !!id,
+  });
+}
+
+export function useUpdateOrder(id: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (data: { status?: string; paymentStatus?: string; trackingNumber?: string; notes?: string }) => {
+      const res = await api.patch(`/api/v1/orders/${id}`, data);
+      return res.data;
+    },
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ['order', id] });
+      void qc.invalidateQueries({ queryKey: ['orders'] });
     },
   });
 }
@@ -421,6 +455,25 @@ export function useUpdateBotSettings() {
   return useMutation({
     mutationFn: async (data: TenantSettings) => {
       const res = await api.patch('/api/v1/settings/bot', data);
+      return res.data;
+    },
+    onSuccess: () => void qc.invalidateQueries({ queryKey: ['settings'] }),
+  });
+}
+
+export function useUpdatePaymentSettings() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (data: {
+      provider?: 'PAYSTACK' | 'FLUTTERWAVE' | 'MANUAL';
+      paystackSecretKey?: string;
+      paystackPublicKey?: string;
+      flutterwaveSecretKey?: string;
+      flutterwavePublicKey?: string;
+      flutterwaveWebhookHash?: string;
+      currency?: string;
+    }) => {
+      const res = await api.patch('/api/v1/settings/payments', data);
       return res.data;
     },
     onSuccess: () => void qc.invalidateQueries({ queryKey: ['settings'] }),

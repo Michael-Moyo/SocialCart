@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import Link from 'next/link';
 import { Header } from '@/components/layout/header';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -68,11 +69,11 @@ export default function OrdersPage() {
               ))
             ) : data?.data?.length ? (
               data.data.map((order) => (
-                <TableRow key={order.id}>
+                <TableRow key={order.id} className="cursor-pointer hover:bg-gray-50 transition-colors">
                   <TableCell>
-                    <span className="font-mono text-xs text-gray-600">
-                      {order.externalId?.slice(0, 12) ?? order.id.slice(0, 8)}
-                    </span>
+                    <Link href={`/dashboard/orders/${order.id}`} className="font-mono text-xs text-[#25D366] hover:underline">
+                      {order.externalId?.slice(0, 12) ?? order.id.slice(0, 8).toUpperCase()}
+                    </Link>
                   </TableCell>
                   <TableCell>
                     <div>
