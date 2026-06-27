@@ -215,6 +215,140 @@ export interface TenantProfile {
   createdAt: string;
 }
 
+// ─── Campaigns ────────────────────────────────────────────────────────────────
+
+export interface Campaign {
+  id: string;
+  name: string;
+  type: string;
+  status: string;
+  message: string;
+  mediaUrl: string | null;
+  templateName: string | null;
+  scheduledAt: string | null;
+  sentAt: string | null;
+  targetSegment: Record<string, unknown>;
+  stats: { sent: number; delivered: number; read: number; replied: number };
+  createdAt: string;
+  updatedAt: string;
+}
+
+export function useCampaigns(params: { page?: number; limit?: number; status?: string } = {}) {
+  return useQuery({
+    queryKey: ['campaigns', params],
+    queryFn: async () => {
+      const res = await api.get<{ success: boolean; data: Campaign[]; meta: PaginatedResponse<Campaign>['meta'] }>(
+        '/api/v1/campaigns',
+        { params }
+      );
+      return res.data;
+    },
+  });
+}
+
+export function useCreateCampaign() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (data: Partial<Campaign> & { name: string; type: string; message: string }) => {
+      const res = await api.post<{ success: boolean; data: Campaign }>('/api/v1/campaigns', data);
+      return res.data.data;
+    },
+    onSuccess: () => void qc.invalidateQueries({ queryKey: ['campaigns'] }),
+  });
+}
+
+export function useLaunchCampaign() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: string) => {
+      const res = await api.post(`/api/v1/campaigns/${id}/launch`);
+      return res.data;
+    },
+    onSuccess: () => void qc.invalidateQueries({ queryKey: ['campaigns'] }),
+  });
+}
+
+export function usePauseCampaign() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: string) => {
+      const res = await api.post(`/api/v1/campaigns/${id}/pause`);
+      return res.data;
+    },
+    onSuccess: () => void qc.invalidateQueries({ queryKey: ['campaigns'] }),
+  });
+}
+
+export function useDeleteCampaign() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: string) => {
+      const res = await api.delete(`/api/v1/campaigns/${id}`);
+      return res.data;
+    },
+    onSuccess: () => void qc.invalidateQueries({ queryKey: ['campaigns'] }),
+  });
+}
+
+// ─── Loyalty ──────────────────────────────────────────────────────────────────
+
+export interface LoyaltyAccount {
+  id: string;
+  customerId: string;
+  tenantId: string;
+  points: number;
+  tier: 'BRONZE' | 'SILVER' | 'GOLD' | 'PLATINUM';
+  history: { date: string; type: string; points: number; reason: string; balance: number }[];
+  customer: { id: string; name: string; phone: string; email: string | null; totalOrders: number; totalSpent: string };
+  pointsToNextTier?: number;
+  nextTier?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface LoyaltyStats {
+  totalMembers: number;
+  tiers: Record<string, { count: number; totalPoints: number }>;
+  thresholds: Record<string, number>;
+}
+
+export function useLoyaltyAccounts(params: { page?: number; limit?: number; tier?: string } = {}) {
+  return useQuery({
+    queryKey: ['loyalty', params],
+    queryFn: async () => {
+      const res = await api.get<{ success: boolean; data: LoyaltyAccount[]; meta: PaginatedResponse<LoyaltyAccount>['meta'] }>(
+        '/api/v1/loyalty',
+        { params }
+      );
+      return res.data;
+    },
+  });
+}
+
+export function useLoyaltyStats() {
+  return useQuery({
+    queryKey: ['loyalty-stats'],
+    queryFn: async () => {
+      const res = await api.get<{ success: boolean; data: LoyaltyStats }>('/api/v1/loyalty/stats');
+      return res.data.data;
+    },
+  });
+}
+
+export function useAwardPoints() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ customerId, points, reason }: { customerId: string; points: number; reason: string }) => {
+      const res = await api.post(`/api/v1/loyalty/${customerId}/award`, { points, reason });
+      return res.data;
+    },
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ['loyalty'] });
+      void qc.invalidateQueries({ queryKey: ['loyalty-stats'] });
+    },
+  });
+}
+
 export function useSettings() {
   return useQuery({
     queryKey: ['settings'],

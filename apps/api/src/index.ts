@@ -1,6 +1,7 @@
 import { createApp } from './app';
 import prisma from './lib/prisma';
 import { integrationService } from './services/integration.service';
+import { startCartRecoveryCron } from './services/cart-recovery.service';
 
 const PORT = parseInt(process.env['PORT'] ?? '3001', 10);
 
@@ -11,6 +12,9 @@ async function main() {
 
   // Load integrations from DB into memory
   await integrationService.loadAll();
+
+  // Start abandoned cart recovery cron (every 15 min)
+  startCartRecoveryCron();
 
   // Start HTTP server
   const app = createApp();

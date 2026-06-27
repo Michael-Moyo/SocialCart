@@ -8,6 +8,8 @@ import customerRoutes from './customers';
 import webhookRoutes from './webhooks';
 import conversationRoutes from './conversations';
 import settingsRoutes from './settings';
+import campaignRoutes from './campaigns';
+import loyaltyRoutes from './loyalty';
 
 const router = Router();
 
@@ -22,5 +24,7 @@ router.use('/orders', authMiddleware, orderRoutes);
 router.use('/customers', authMiddleware, customerRoutes);
 router.use('/conversations', authMiddleware, conversationRoutes);
 router.use('/settings', authMiddleware, settingsRoutes);
+router.use('/campaigns', authMiddleware, campaignRoutes);
+router.use('/loyalty', authMiddleware, loyaltyRoutes);
 
 export default router;
