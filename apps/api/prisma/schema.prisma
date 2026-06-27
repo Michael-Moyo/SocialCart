@@ -112,6 +112,13 @@ enum LoyaltyTier {
   PLATINUM
 }
 
+enum TeamRole {
+  OWNER
+  MANAGER
+  AGENT
+  SALES_REP
+}
+
 // ─── Models ───────────────────────────────────────────────────────────────────
 
 model Tenant {
@@ -135,6 +142,7 @@ model Tenant {
   carts         Cart[]
   conversations Conversation[]
   campaigns     Campaign[]
+  teamMembers   TeamMember[]
 
   @@index([phone])
   @@map("tenants")
@@ -281,20 +289,22 @@ model Cart {
 }
 
 model Conversation {
-  id          String             @id @default(uuid())
-  tenantId    String
-  customerId  String
-  waNumber    String
-  status      ConversationStatus @default(BOT)
-  currentFlow String?
-  context     Json               @default("{}")
-  assignedTo  String?
-  createdAt   DateTime           @default(now())
-  updatedAt   DateTime           @updatedAt
+  id               String             @id @default(uuid())
+  tenantId         String
+  customerId       String
+  waNumber         String
+  status           ConversationStatus @default(BOT)
+  currentFlow      String?
+  context          Json               @default("{}")
+  assignedTo       String?            // legacy free-text
+  assignedMemberId String?            // FK to TeamMember
+  createdAt        DateTime           @default(now())
+  updatedAt        DateTime           @updatedAt
 
-  tenant   Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  customer Customer  @relation(fields: [customerId], references: [id])
-  messages Message[]
+  tenant         Tenant      @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  customer       Customer    @relation(fields: [customerId], references: [id])
+  messages       Message[]
+  assignedMember TeamMember? @relation("AssignedConversations", fields: [assignedMemberId], references: [id])
 
   @@index([tenantId])
   @@index([customerId])
@@ -345,6 +355,45 @@ model Campaign {
   @@index([status])
   @@index([scheduledAt])
   @@map("campaigns")
+}
+
+// Platform-level super admin (SocialCart operators)
+model SuperAdmin {
+  id           String   @id @default(uuid())
+  name         String
+  email        String   @unique
+  passwordHash String
+  isActive     Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@map("super_admins")
+}
+
+// Team members within a tenant (agents, managers, sales reps)
+model TeamMember {
+  id           String    @id @default(uuid())
+  tenantId     String
+  name         String
+  email        String?
+  phone        String?
+  passwordHash String
+  role         TeamRole  @default(AGENT)
+  managerId    String?   // null for OWNER/top-level MANAGER
+  isActive     Boolean   @default(true)
+  permissions  Json      @default("{}")
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  tenant                Tenant         @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  manager               TeamMember?    @relation("TeamHierarchy", fields: [managerId], references: [id])
+  reports               TeamMember[]   @relation("TeamHierarchy")
+  assignedConversations Conversation[] @relation("AssignedConversations")
+
+  @@unique([tenantId, email])
+  @@index([tenantId])
+  @@index([managerId])
+  @@map("team_members")
 }
 
 model LoyaltyAccount {

@@ -13,6 +13,7 @@ import {
   Gift,
   Settings,
   Zap,
+  UsersRound,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -25,6 +26,7 @@ const navItems = [
   { href: '/dashboard/conversations', label: 'Conversations', icon: MessageSquare },
   { href: '/dashboard/campaigns', label: 'Campaigns', icon: Megaphone },
   { href: '/dashboard/loyalty', label: 'Loyalty', icon: Gift },
+  { href: '/dashboard/team', label: 'Team', icon: UsersRound },
   { href: '/dashboard/settings', label: 'Settings', icon: Settings },
 ];
 
