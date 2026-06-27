@@ -1,7 +1,7 @@
 'use client';
 
-import { useState, useCallback } from 'react';
-import { MessageSquare, User, CheckCircle, Clock, Search, RefreshCw, ChevronRight, Wifi, WifiOff } from 'lucide-react';
+import { useState, useCallback, useRef, useEffect } from 'react';
+import { MessageSquare, User, CheckCircle, Clock, Search, RefreshCw, ChevronRight, Wifi, WifiOff, Send } from 'lucide-react';
 import { Header } from '@/components/layout/header';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -9,6 +9,7 @@ import {
   useConversations,
   useConversation,
   useResolveConversation,
+  useReplyConversation,
   type ConversationListItem,
   type ConversationMessage,
 } from '@/lib/api';
@@ -108,6 +109,33 @@ function MessageBubble({ msg }: { msg: ConversationMessage }) {
 function ConversationThread({ id }: { id: string }) {
   const { data: convo, isLoading } = useConversation(id);
   const resolve = useResolveConversation();
+  const reply = useReplyConversation(id);
+  const [replyText, setReplyText] = useState('');
+  const bottomRef = useRef<HTMLDivElement>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  // Scroll to bottom when messages change
+  useEffect(() => {
+    bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [convo?.messages?.length]);
+
+  function sendReply() {
+    const text = replyText.trim();
+    if (!text || reply.isPending) return;
+    reply.mutate(text, {
+      onSuccess: () => {
+        setReplyText('');
+        textareaRef.current?.focus();
+      },
+    });
+  }
+
+  function handleKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>) {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      sendReply();
+    }
+  }
 
   if (isLoading) {
     return (
@@ -158,7 +186,31 @@ function ConversationThread({ id }: { id: string }) {
         {convo.messages.map((msg) => (
           <MessageBubble key={msg.id} msg={msg} />
         ))}
+        <div ref={bottomRef} />
       </div>
+
+      {/* Reply box */}
+      {convo.status !== 'RESOLVED' && (
+        <div className="px-4 py-3 border-t border-gray-200 bg-white flex items-end gap-2 flex-shrink-0">
+          <textarea
+            ref={textareaRef}
+            value={replyText}
+            onChange={(e) => setReplyText(e.target.value)}
+            onKeyDown={handleKeyDown}
+            placeholder="Type a reply… (Enter to send, Shift+Enter for newline)"
+            rows={2}
+            className="flex-1 resize-none text-sm border border-gray-200 rounded-xl px-3 py-2 focus:outline-none focus:ring-2 focus:ring-[#25D366]/30 focus:border-[#25D366]"
+          />
+          <Button
+            size="sm"
+            onClick={sendReply}
+            disabled={!replyText.trim() || reply.isPending}
+            className="flex-shrink-0 h-10 w-10 p-0 rounded-xl"
+          >
+            <Send className="h-4 w-4" />
+          </Button>
+        </div>
+      )}
 
       {/* Info footer */}
       <div className="px-5 py-2 border-t border-gray-100 bg-gray-50 flex items-center gap-4 text-xs text-gray-400 flex-shrink-0">

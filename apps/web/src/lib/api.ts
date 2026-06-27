@@ -68,6 +68,7 @@ export interface Customer {
   totalOrders: number;
   totalSpent: string;
   tags: string[];
+  metadata: Record<string, unknown> | null;
   createdAt: string;
 }
 
@@ -157,6 +158,25 @@ export function useCustomers(params: { page?: number; limit?: number; search?: s
       );
       return res.data;
     },
+  });
+}
+
+export interface CustomerDetail extends Customer {
+  orders: Array<{
+    id: string; externalId: string | null; status: string; total: string; createdAt: string;
+    items: unknown;
+  }>;
+  loyaltyAccount: { points: number; tier: string } | null;
+}
+
+export function useCustomerDetail(id: string) {
+  return useQuery({
+    queryKey: ['customer', id],
+    queryFn: async () => {
+      const res = await api.get<{ success: boolean; data: CustomerDetail }>(`/api/v1/customers/${id}`);
+      return res.data.data;
+    },
+    enabled: !!id,
   });
 }
 
@@ -432,7 +452,21 @@ export function useConversation(id: string | null) {
       return res.data.data;
     },
     enabled: !!id,
-    refetchInterval: 5000,
+    refetchInterval: 30000, // SSE handles real-time; this is a fallback
+  });
+}
+
+export function useReplyConversation(conversationId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (text: string) => {
+      const res = await api.post(`/api/v1/conversations/${conversationId}/reply`, { text });
+      return res.data;
+    },
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ['conversation', conversationId] });
+      void qc.invalidateQueries({ queryKey: ['conversations'] });
+    },
   });
 }
 
