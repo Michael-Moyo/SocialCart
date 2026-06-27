@@ -27,6 +27,8 @@ export const viewport: Viewport = {
   userScalable: false,
 };
 
+import { Providers } from './providers';
+
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en">
@@ -34,7 +36,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <link rel="apple-touch-icon" href="/icons/icon-192x192.png" />
         <meta name="mobile-web-app-capable" content="yes" />
       </head>
-      <body className="h-full bg-[#ECE5DD]">{children}</body>
+      <body className="h-full bg-[#ECE5DD]">
+        <Providers>{children}</Providers>
+      </body>
     </html>
   );
 }

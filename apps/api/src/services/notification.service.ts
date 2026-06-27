@@ -125,8 +125,20 @@ class NotificationService extends EventEmitter {
     await this.dispatch({
       tenantId,
       type: 'NEW_CONVERSATION',
-      title: 'New Conversation',
-      body: `${customerName} started a conversation`,
+      title: `💬 ${customerName}`,
+      body: 'Started a new conversation',
+      data: { conversationId, customerName },
+      channels: ['IN_APP', 'PUSH'],
+    });
+  }
+
+  async notifyNewMessage(tenantId: string, memberId: string, customerName: string, conversationId: string, text: string) {
+    await this.dispatch({
+      tenantId,
+      memberId,
+      type: 'NEW_CONVERSATION',
+      title: customerName,
+      body: text.length > 80 ? `${text.slice(0, 80)}…` : text,
       data: { conversationId, customerName },
       channels: ['IN_APP', 'PUSH'],
     });

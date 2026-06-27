@@ -59,7 +59,7 @@ export const conversationService = {
     phone: string,
     message: string,
     waMessageId?: string
-  ): Promise<void> {
+  ): Promise<{ id: string; assignedMemberId: string | null } | null> {
     let customer = await prisma.customer.findFirst({
       where: { tenantId, phone },
     });
@@ -141,6 +141,8 @@ export const conversationService = {
         status: 'DELIVERED',
       },
     });
+
+    return { id: conversation.id, assignedMemberId: conversation.assignedMemberId };
   },
 
   async triggerCartRecovery(

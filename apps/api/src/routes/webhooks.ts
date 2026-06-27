@@ -3,6 +3,7 @@ import { integrationManager, PlatformType } from '@socialcart/integrations';
 import { parseWebhookPayload, extractMessageText, extractInteractiveReplyId } from '@socialcart/whatsapp';
 import prisma from '../lib/prisma';
 import { conversationService } from '../services/conversation.service';
+import { notificationService } from '../services/notification.service';
 
 const router = Router();
 
@@ -103,12 +104,26 @@ async function processWhatsAppEvent(event: ReturnType<typeof parseWebhookPayload
     // For now fall back to env var; production should look up by phoneNumberId
     const tenantId = process.env['DEFAULT_TENANT_ID'] ?? 'default';
 
-    await conversationService.handleIncoming(
+    const conversation = await conversationService.handleIncoming(
       tenantId,
       event.from,
       messageText,
       event.messageId
     );
+
+    // Notify assigned agent (or all agents) about the new inbound message
+    if (conversation && messageText) {
+      const customer = await prisma.customer.findFirst({ where: { phone: event.from, tenantId }, select: { name: true } });
+      const customerName = customer?.name ?? event.from;
+
+      if (conversation.assignedMemberId) {
+        // Notify the specific assigned agent
+        await notificationService.notifyNewMessage(tenantId, conversation.assignedMemberId, customerName, conversation.id, messageText);
+      } else {
+        // Notify owner + managers (no specific assignment yet)
+        await notificationService.notifyNewConversation(tenantId, customerName, conversation.id);
+      }
+    }
   } else if (event.type.startsWith('status.')) {
     if (event.messageId) {
       const status = event.type.split('.')[1]?.toUpperCase() as 'SENT' | 'DELIVERED' | 'READ' | 'FAILED';
