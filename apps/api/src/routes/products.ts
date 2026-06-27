@@ -3,6 +3,9 @@ import { z } from 'zod';
 import { validate } from '../middleware/validate';
 import prisma from '../lib/prisma';
 import { buildPaginatedResponse } from '@socialcart/shared';
+import { notificationService } from '../services/notification.service';
+
+const LOW_STOCK_THRESHOLD = 5;
 
 const router = Router();
 
@@ -140,6 +143,16 @@ router.patch('/:id', validate(updateProductSchema), async (req, res, next) => {
         ...(body.categories !== undefined && { categories: body.categories }),
       },
     });
+
+    // Fire low-stock alert when inventory transitions into danger zone
+    if (
+      body.inventory !== undefined &&
+      existing.inventory > LOW_STOCK_THRESHOLD &&
+      body.inventory <= LOW_STOCK_THRESHOLD
+    ) {
+      void notificationService.notifyLowStock(tenantId, product.name, body.inventory);
+    }
+
     res.json({ success: true, data: product });
   } catch (err) {
     next(err);

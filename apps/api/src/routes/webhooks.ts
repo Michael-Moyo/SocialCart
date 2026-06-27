@@ -146,6 +146,11 @@ async function processWhatsAppEvent(event: ReturnType<typeof parseWebhookPayload
   } else if (event.type.startsWith('status.')) {
     if (event.messageId) {
       const status = event.type.split('.')[1]?.toUpperCase() as 'SENT' | 'DELIVERED' | 'READ' | 'FAILED';
+      const updated = await prisma.message.findFirst({
+        where: { waMessageId: event.messageId },
+        select: { id: true, conversationId: true },
+      });
+
       await prisma.message.updateMany({
         where: { waMessageId: event.messageId },
         data: {
@@ -154,6 +159,27 @@ async function processWhatsAppEvent(event: ReturnType<typeof parseWebhookPayload
           ...(status === 'READ' && { readAt: event.timestamp }),
         },
       });
+
+      // Push read receipt to SSE so dashboard ticks update without polling
+      if (updated) {
+        const msg = await prisma.message.findFirst({
+          where: { id: updated.id },
+          select: { conversationId: true },
+        });
+        if (msg) {
+          const conv = await prisma.conversation.findUnique({
+            where: { id: msg.conversationId },
+            select: { tenantId: true },
+          });
+          if (conv) {
+            pushToTenant(conv.tenantId, 'message:status', {
+              messageId: event.messageId,
+              conversationId: msg.conversationId,
+              status,
+            });
+          }
+        }
+      }
     }
   }
 }

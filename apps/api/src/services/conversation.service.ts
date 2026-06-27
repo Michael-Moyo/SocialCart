@@ -11,6 +11,9 @@ import {
 } from '@socialcart/flow-engine';
 import { WhatsAppClient } from '@socialcart/whatsapp';
 import prisma from '../lib/prisma';
+import { notificationService } from './notification.service';
+import { pushToTenant } from '../routes/sse';
+import type { NotificationType } from '@prisma/client';
 
 function buildEngine(): FlowEngine {
   const engine = new FlowEngine();
@@ -62,6 +65,70 @@ function emptyContext(
     cart: [],
     data: {},
   };
+}
+
+const LOW_STOCK_THRESHOLD = 5;
+
+async function handleCreateOrderAction(
+  tenantId: string,
+  conversationId: string,
+  customerId: string,
+  action: Extract<import('@socialcart/flow-engine').FlowAction, { type: 'create_order' }>
+): Promise<void> {
+  try {
+    const total = action.items.reduce((sum, i) => sum + i.price * i.quantity, 0);
+
+    const order = await prisma.order.create({
+      data: {
+        tenantId,
+        customerId,
+        source: null,
+        status: 'pending',
+        paymentStatus: 'unpaid',
+        fulfillmentStatus: 'unfulfilled',
+        subtotal: total,
+        tax: 0,
+        shipping: 0,
+        discount: 0,
+        total,
+        currency: 'NGN',
+        items: action.items,
+        shippingAddress: action.shippingAddress ?? null,
+        notes: action.notes ?? null,
+      },
+    });
+
+    // SSE push so dashboard shows new order
+    pushToTenant(tenantId, 'order:created', { orderId: order.id, total, currency: 'NGN' });
+
+    // Decrement inventory for each item and check for low stock
+    for (const item of action.items) {
+      const product = await prisma.product.findFirst({
+        where: { tenantId, sku: item.sku },
+        select: { id: true, inventory: true, name: true },
+      });
+      if (!product) continue;
+
+      const newInventory = Math.max(0, product.inventory - item.quantity);
+      await prisma.product.update({ where: { id: product.id }, data: { inventory: newInventory } });
+
+      if (product.inventory > LOW_STOCK_THRESHOLD && newInventory <= LOW_STOCK_THRESHOLD) {
+        void notificationService.dispatch({
+          tenantId,
+          type: 'LOW_STOCK' as NotificationType,
+          title: 'Low Stock Alert',
+          body: `${product.name} is low on stock — only ${newInventory} left`,
+          data: { productId: product.id, productName: product.name, inventory: newInventory },
+          channels: ['IN_APP', 'PUSH'],
+        });
+      }
+    }
+
+    // Notify owner of new WhatsApp order
+    void notificationService.notifyNewOrder(tenantId, order.id.slice(0, 8).toUpperCase(), `NGN ${total.toFixed(2)}`);
+  } catch (err) {
+    console.error('[createOrder action]', err);
+  }
 }
 
 export const conversationService = {
@@ -144,6 +211,8 @@ export const conversationService = {
           action.header,
           action.footer
         );
+      } else if (action.type === 'create_order') {
+        void handleCreateOrderAction(tenantId, conversation.id, customer.id, action);
       }
     }
 

@@ -52,7 +52,15 @@ export type FlowAction =
     }
   | { type: 'transition'; flow: string; step: string }
   | { type: 'update_context'; updates: Partial<FlowContext> }
-  | { type: 'end_flow' };
+  | { type: 'end_flow' }
+  | {
+      type: 'create_order';
+      items: CartItem[];
+      shippingAddress: FlowContext['pendingAddress'];
+      customerPhone: string;
+      customerName?: string;
+      notes?: string;
+    };
 
 export type StepHandler = (input: string, ctx: FlowContext) => Promise<FlowAction[]>;
 

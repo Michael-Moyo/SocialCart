@@ -151,6 +151,15 @@ export function useAgentSSE(
         void qc.invalidateQueries({ queryKey: ['agent-conversations'] });
       });
 
+      es.addEventListener('message:status', (e: MessageEvent) => {
+        try {
+          const data = JSON.parse(e.data as string) as { conversationId: string };
+          if (data.conversationId && data.conversationId === activeRef.current) {
+            void qc.invalidateQueries({ queryKey: ['agent-conversation', data.conversationId] });
+          }
+        } catch {}
+      });
+
       es.addEventListener('conversation:assigned', (e: MessageEvent) => {
         try {
           const data = JSON.parse(e.data as string) as {

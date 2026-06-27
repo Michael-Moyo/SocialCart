@@ -146,6 +146,7 @@ enum NotificationType {
   CAMPAIGN_COMPLETE
   LOYALTY_TIER_UP
   TEAM_INVITE
+  LOW_STOCK
   SYSTEM
 }
 

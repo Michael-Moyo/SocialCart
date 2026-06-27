@@ -191,6 +191,17 @@ class NotificationService extends EventEmitter {
     });
   }
 
+  async notifyLowStock(tenantId: string, productName: string, inventory: number) {
+    await this.dispatch({
+      tenantId,
+      type: 'LOW_STOCK',
+      title: 'Low Stock Alert',
+      body: `${productName} is low on stock — only ${inventory} left`,
+      data: { productName, inventory },
+      channels: ['IN_APP', 'PUSH'],
+    });
+  }
+
   async notifyTeamInvite(tenantId: string, memberId: string, inviterName: string) {
     await this.dispatch({
       tenantId,

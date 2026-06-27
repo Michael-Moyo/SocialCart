@@ -334,6 +334,13 @@ export default function ConversationsPage() {
       }
       setSseConnected(true);
     }, [queryClient]),
+    'message:status': useCallback((data: unknown) => {
+      const d = data as { conversationId: string };
+      if (d.conversationId) {
+        void queryClient.invalidateQueries({ queryKey: ['conversation', d.conversationId] });
+      }
+      setSseConnected(true);
+    }, [queryClient]),
   });
 
   const { data, isLoading, refetch, isFetching } = useConversations({

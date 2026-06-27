@@ -154,10 +154,18 @@ export const checkoutFlow: Flow = {
         const orderId = generateOrderId();
 
         return [
-          { type: 'update_context', updates: { cart: [], currentFlow: null, currentStep: null } },
+          {
+            type: 'create_order',
+            items: ctx.cart,
+            shippingAddress: ctx.pendingAddress,
+            customerPhone: ctx.phone,
+            customerName: ctx.customerName,
+            notes: `WhatsApp order — ref ${orderId}`,
+          },
+          { type: 'update_context', updates: { cart: [], pendingAddress: undefined, currentFlow: null, currentStep: null } },
           {
             type: 'send_text',
-            text: `Order placed! 🎉\n\nOrder #${orderId} confirmed.\n\nWe'll send you updates as your order progresses. Thank you for shopping with us! 🛍️\n\nReply *menu* anytime to continue shopping.`,
+            text: `Order placed! 🎉\n\nOrder *#${orderId}* confirmed.\n\nWe'll send you updates as your order progresses. Thank you for shopping with us! 🛍️\n\nReply *menu* anytime to continue shopping.`,
           },
           { type: 'end_flow' },
         ];
