@@ -454,7 +454,7 @@ export function useSettings() {
 export function useUpdateProfile() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async (data: { name?: string; email?: string | null }) => {
+    mutationFn: async (data: { name?: string; email?: string | null; logoUrl?: string | null; tagline?: string | null; primaryColor?: string }) => {
       const res = await api.patch('/api/v1/settings/profile', data);
       return res.data;
     },

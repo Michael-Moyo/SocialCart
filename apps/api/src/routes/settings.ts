@@ -54,16 +54,26 @@ router.get('/', async (req: Request, res: Response) => {
 const profileSchema = z.object({
   name: z.string().min(2).optional(),
   email: z.string().email().optional().nullable(),
+  logoUrl: z.string().url().optional().nullable(),
+  tagline: z.string().max(120).optional().nullable(),
+  primaryColor: z.string().regex(/^#[0-9a-fA-F]{6}$/).optional(),
 });
 
 router.patch('/profile', validate(profileSchema), async (req: Request, res: Response) => {
   const id = tenantId(req);
-  const data = req.body as z.infer<typeof profileSchema>;
+  const { name, email, ...brandingFields } = req.body as z.infer<typeof profileSchema>;
+
+  const tenant = await prisma.tenant.findUnique({ where: { id }, select: { settings: true } });
+  const currentSettings = (tenant?.settings ?? {}) as Record<string, unknown>;
 
   const updated = await prisma.tenant.update({
     where: { id },
-    data,
-    select: { id: true, name: true, phone: true, email: true, plan: true },
+    data: {
+      ...(name ? { name } : {}),
+      ...(email !== undefined ? { email } : {}),
+      settings: { ...currentSettings, ...brandingFields },
+    },
+    select: { id: true, name: true, phone: true, email: true, plan: true, settings: true },
   });
 
   res.json({ success: true, data: updated });

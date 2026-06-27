@@ -17,12 +17,14 @@ import paymentRoutes from './payments';
 import analyticsRoutes from './analytics';
 import sseRoutes from './sse';
 import simulatorRoutes from './simulator';
+import publicRoutes from './public';
 
 const router = Router();
 
 // Public
 router.use('/auth', authRoutes);
 router.use('/webhooks', webhookRoutes);
+router.use('/public', publicRoutes);
 
 // Protected
 router.use('/integrations', authMiddleware, integrationRoutes);

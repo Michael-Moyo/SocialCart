@@ -169,18 +169,31 @@ function ProfileSection() {
   const update = useUpdateProfile();
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
+  const [logoUrl, setLogoUrl] = useState('');
+  const [tagline, setTagline] = useState('');
+  const [primaryColor, setPrimaryColor] = useState('#25D366');
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
 
   useEffect(() => {
     if (data) {
       setName(data.name);
       setEmail(data.email ?? '');
+      const s = data.settings as Record<string, unknown>;
+      setLogoUrl((s['logoUrl'] as string) ?? '');
+      setTagline((s['tagline'] as string) ?? '');
+      setPrimaryColor((s['primaryColor'] as string) ?? '#25D366');
     }
   }, [data]);
 
   async function save() {
     try {
-      await update.mutateAsync({ name, email: email || null });
+      await update.mutateAsync({
+        name,
+        email: email || null,
+        logoUrl: logoUrl || null,
+        tagline: tagline || null,
+        primaryColor,
+      });
       setToast({ message: 'Profile updated', type: 'success' });
     } catch {
       setToast({ message: 'Failed to update profile', type: 'error' });
@@ -189,7 +202,7 @@ function ProfileSection() {
   }
 
   return (
-    <Section title="Business Profile" description="Update your store name and contact details">
+    <Section title="Business Profile" description="Update your store name, contact details, and branding">
       <Field label="Store name">
         <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="My Store" />
       </Field>
@@ -203,6 +216,23 @@ function ProfileSection() {
           onChange={(e) => setEmail(e.target.value)}
           placeholder="you@example.com"
         />
+      </Field>
+      <Field label="Logo URL" hint="Direct link to your store logo image">
+        <Input value={logoUrl} onChange={(e) => setLogoUrl(e.target.value)} placeholder="https://..." />
+      </Field>
+      <Field label="Store tagline" hint="Short description shown in the chat header">
+        <Input value={tagline} onChange={(e) => setTagline(e.target.value)} placeholder="Quality goods delivered fast" />
+      </Field>
+      <Field label="Brand color">
+        <div className="flex items-center gap-3">
+          <input
+            type="color"
+            value={primaryColor}
+            onChange={(e) => setPrimaryColor(e.target.value)}
+            className="h-10 w-16 rounded-lg border border-gray-200 cursor-pointer p-1"
+          />
+          <Input value={primaryColor} onChange={(e) => setPrimaryColor(e.target.value)} placeholder="#25D366" className="flex-1" />
+        </div>
       </Field>
       <div className="flex items-center gap-3 pt-2 border-t border-gray-100">
         <Button onClick={save} loading={update.isPending}>

@@ -162,13 +162,16 @@ router.post('/', requireRole('OWNER', 'MANAGER'), validate(inviteSchema), async 
 const loginSchema = z.object({
   email: z.string().email(),
   password: z.string().min(1),
-  tenantId: z.string().uuid(),
+  tenantId: z.string().uuid().optional(),
 });
 
 router.post('/login', validate(loginSchema), async (req: Request, res: Response) => {
   const { email, password, tenantId } = req.body as z.infer<typeof loginSchema>;
 
-  const member = await prisma.teamMember.findUnique({ where: { tenantId_email: { tenantId, email } } });
+  // If tenantId supplied look up precisely; otherwise find by email across tenants
+  const member = tenantId
+    ? await prisma.teamMember.findUnique({ where: { tenantId_email: { tenantId, email } } })
+    : await prisma.teamMember.findFirst({ where: { email } });
   if (!member) {
     res.status(401).json({ success: false, error: 'Invalid credentials' });
     return;
@@ -180,7 +183,7 @@ router.post('/login', validate(loginSchema), async (req: Request, res: Response)
     return;
   }
 
-  const token = generateMemberToken(tenantId, member.id, member.role as TeamRole);
+  const token = generateMemberToken(member.tenantId, member.id, member.role as TeamRole);
   const { passwordHash: _, ...memberData } = member;
   res.json({ success: true, data: { token, member: memberData } });
 });

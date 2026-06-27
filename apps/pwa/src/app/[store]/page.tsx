@@ -20,17 +20,27 @@ function getOrCreatePhone(): string {
   return generated;
 }
 
+interface StoreInfo { id: string; name: string; logoUrl: string | null; tagline: string | null; primaryColor: string }
+
+const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3001';
+
 export default function StorePage({ params }: StorePageProps) {
   const { store } = params;
   const [messages, setMessages] = useState<Message[]>([]);
   const [sending, setSending] = useState(false);
   const [phone, setPhone] = useState('');
-  const [storeName, setStoreName] = useState(store);
+  const [storeInfo, setStoreInfo] = useState<StoreInfo | null>(null);
+  const [notFound, setNotFound] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     setPhone(getOrCreatePhone());
-    setStoreName(store.replace(/-/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase()));
+  }, []);
+
+  useEffect(() => {
+    axios.get<{ success: boolean; data: StoreInfo }>(`${API_BASE}/api/v1/public/stores/${store}`)
+      .then((r) => setStoreInfo(r.data.data))
+      .catch(() => setNotFound(true));
   }, [store]);
 
   useEffect(() => {
@@ -86,16 +96,36 @@ export default function StorePage({ params }: StorePageProps) {
     handleSend(id);
   }
 
+  if (notFound) {
+    return (
+      <div className="flex flex-col items-center justify-center h-full bg-[#ECE5DD] px-6 text-center">
+        <div className="text-5xl mb-4">🛒</div>
+        <h2 className="text-[#075E54] font-bold text-lg mb-2">Store not found</h2>
+        <p className="text-gray-500 text-sm">This store link may be invalid or the store is currently unavailable.</p>
+      </div>
+    );
+  }
+
+  if (!storeInfo) {
+    return (
+      <div className="flex items-center justify-center h-full bg-[#ECE5DD]">
+        <div className="w-8 h-8 border-2 border-[#25D366] border-t-transparent rounded-full animate-spin" />
+      </div>
+    );
+  }
+
   return (
     <div className="flex flex-col h-full max-h-screen bg-[#ECE5DD]">
       {/* Header */}
-      <div className="bg-[#075E54] px-4 py-3 flex items-center gap-3 shadow-md">
-        <div className="w-10 h-10 bg-[#25D366] rounded-full flex items-center justify-center text-xl shrink-0">
-          🛒
+      <div className="px-4 py-3 flex items-center gap-3 shadow-md" style={{ backgroundColor: storeInfo.primaryColor === '#25D366' ? '#075E54' : storeInfo.primaryColor }}>
+        <div className="w-10 h-10 rounded-full flex items-center justify-center text-xl shrink-0 overflow-hidden" style={{ backgroundColor: storeInfo.primaryColor }}>
+          {storeInfo.logoUrl
+            ? <img src={storeInfo.logoUrl} alt={storeInfo.name} className="w-full h-full object-cover" />
+            : '🛒'}
         </div>
         <div className="flex-1 min-w-0">
-          <div className="text-white font-semibold truncate">{storeName}</div>
-          <div className="text-[#25D366] text-xs">tap here for store info</div>
+          <div className="text-white font-semibold truncate">{storeInfo.name}</div>
+          <div className="text-xs opacity-70 text-white">{storeInfo.tagline ?? 'Chat to shop'}</div>
         </div>
         <div className="flex items-center gap-3 text-white">
           <svg className="w-5 h-5 opacity-80" fill="currentColor" viewBox="0 0 24 24">
