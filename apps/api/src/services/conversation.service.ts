@@ -173,10 +173,12 @@ export const conversationService = {
   ): Promise<{ id: string; assignedMemberId: string | null } | null> {
     const tenant = await prisma.tenant.findUnique({
       where: { id: tenantId },
-      select: { settings: true },
+      select: { name: true, settings: true },
     });
     const tenantSettings = (tenant?.settings ?? {}) as Record<string, unknown>;
     const disabledFlows = (tenantSettings['disabledFlows'] as string[] | undefined) ?? [];
+    const storeName = tenant?.name ?? 'SocialCart';
+    const storeCurrency = (tenantSettings['currency'] as string | undefined) ?? 'NGN';
 
     let customer = await prisma.customer.findFirst({
       where: { tenantId, phone },
@@ -217,6 +219,8 @@ export const conversationService = {
       data: {
         ...(storedContext?.data ?? {}),
         disabledFlows,
+        storeName,
+        storeCurrency,
         // Injected data-access callbacks — not persisted to DB
         fetchProducts: async (query: string, tid: string) => {
           const where = {

@@ -1,15 +1,24 @@
 import { Flow, FlowAction, FlowContext, CartItem } from '../types';
 
-function formatPrice(price: number): string {
-  return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(price);
+function detectCurrency(cart: CartItem[]): string {
+  return cart.find((i) => i.currency)?.currency ?? 'NGN';
+}
+
+function formatPrice(price: number, currency = 'NGN'): string {
+  return new Intl.NumberFormat('en-NG', {
+    style: 'currency',
+    currency: currency === 'USD' ? 'USD' : 'NGN',
+    minimumFractionDigits: 0,
+  }).format(price);
 }
 
 function buildCartSummary(cart: CartItem[]): string {
+  const currency = detectCurrency(cart);
   const lines = cart.map(
-    (item) => `• ${item.name} × ${item.quantity} — ${formatPrice(item.price * item.quantity)}`
+    (item) => `• ${item.name} × ${item.quantity} — ${formatPrice(item.price * item.quantity, currency)}`
   );
   const total = cart.reduce((sum, item) => sum + item.price * item.quantity, 0);
-  lines.push(`\n*Total: ${formatPrice(total)}*`);
+  lines.push(`\n*Total: ${formatPrice(total, currency)}*`);
   return lines.join('\n');
 }
 
@@ -128,13 +137,14 @@ export const checkoutFlow: Flow = {
 
         const paymentLabel = paymentLabels[input] ?? input;
         const summary = buildCartSummary(ctx.cart);
+        const currency = detectCurrency(ctx.cart);
         const total = ctx.cart.reduce((sum, item) => sum + item.price * item.quantity, 0);
 
         return [
           { type: 'update_context', updates: { data: { ...ctx.data, paymentMethod: input } } },
           {
             type: 'send_buttons',
-            body: `*Order Summary*\n\n${summary}\n\n*Payment:* ${paymentLabel}\n*Delivery:* ${ctx.pendingAddress ? `${ctx.pendingAddress.address1}, ${ctx.pendingAddress.city}` : 'Address on file'}\n\n*Grand Total: ${formatPrice(total)}*`,
+            body: `*Order Summary*\n\n${summary}\n\n*Payment:* ${paymentLabel}\n*Delivery:* ${ctx.pendingAddress ? `${ctx.pendingAddress.address1}, ${ctx.pendingAddress.city}` : 'Address on file'}\n\n*Grand Total: ${formatPrice(total, currency)}*`,
             buttons: [
               { id: 'place_order', title: 'Place Order' },
               { id: 'edit_cart', title: 'Edit Cart' },

@@ -65,11 +65,18 @@ export const mainMenuFlow: Flow = {
 
   onEntry: async (ctx: FlowContext): Promise<FlowAction[]> => {
     const disabled = new Set<string>((ctx.data?.['disabledFlows'] as string[] | undefined) ?? []);
+    const storeName = (ctx.data?.['storeName'] as string | undefined) ?? 'our store';
+    const cartCount = ctx.cart.reduce((s, i) => s + i.quantity, 0);
+    const greeting = ctx.customerName ? `Hi ${ctx.customerName.split(' ')[0]}! 👋` : 'Welcome! 👋';
 
     const shopRows = [
       !disabled.has('browse') && { id: 'browse_products', title: 'Browse Products', description: 'Explore our catalogue' },
       !disabled.has('browse') && { id: 'search_product', title: 'Search Product', description: 'Find something specific' },
-      { id: 'view_cart', title: 'View Cart', description: 'See items in your cart' },
+      {
+        id: 'view_cart',
+        title: cartCount > 0 ? `View Cart (${cartCount})` : 'View Cart',
+        description: cartCount > 0 ? `${cartCount} item${cartCount !== 1 ? 's' : ''} waiting` : 'Your cart is empty',
+      },
     ].filter(Boolean) as { id: string; title: string; description: string }[];
 
     const orderRows = [
@@ -92,7 +99,7 @@ export const mainMenuFlow: Flow = {
     return [
       {
         type: 'send_list',
-        header: 'Welcome to SocialCart 🛒',
+        header: `${greeting} Welcome to ${storeName}`,
         body: 'What would you like to do today?',
         footer: 'Tap an option below',
         button: 'View Menu',

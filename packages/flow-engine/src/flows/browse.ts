@@ -198,6 +198,7 @@ export const browseFlow: Flow = {
           sku: product?.sku ?? `SKU-${productId}`,
           name: product?.name ?? `Product ${productId}`,
           price: product?.price ?? 0,
+          currency: product?.currency ?? (ctx.data['storeCurrency'] as string | undefined) ?? 'NGN',
           quantity: 1,
           ...(product?.imageUrl ? { imageUrl: product.imageUrl } : {}),
         };
