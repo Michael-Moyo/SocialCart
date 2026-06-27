@@ -11,9 +11,10 @@ import { StatCard } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { useOrders, useCustomers, useIntegrations, useAnalyticsOverview } from '@/lib/api';
 import { formatCurrency, formatDateTime, platformLabel } from '@/lib/utils';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from '@/lib/api';
 import { cn } from '@/lib/utils';
+import { useSSE } from '@/lib/use-sse';
 
 interface OnboardingStatus {
   steps: Record<string, boolean>;
@@ -102,10 +103,21 @@ function OnboardingBanner() {
 // ─── Main Page ────────────────────────────────────────────────────────────────
 
 export default function DashboardPage() {
+  const qc = useQueryClient();
   const { data: ordersData } = useOrders({ limit: 5 });
   const { data: customersData } = useCustomers({ limit: 5 });
   const { data: integrations } = useIntegrations();
   const { data: analytics } = useAnalyticsOverview(7);
+
+  useSSE({
+    'order:created': () => {
+      void qc.invalidateQueries({ queryKey: ['orders'] });
+      void qc.invalidateQueries({ queryKey: ['analytics-overview'] });
+    },
+    'notification': () => {
+      void qc.invalidateQueries({ queryKey: ['notifications'] });
+    },
+  });
 
   const totalRevenue = analytics?.revenue?.value ?? ordersData?.data?.reduce((sum, o) => sum + parseFloat(o.total), 0) ?? 0;
   const totalOrders = analytics?.orders?.value ?? ordersData?.meta?.total ?? 0;

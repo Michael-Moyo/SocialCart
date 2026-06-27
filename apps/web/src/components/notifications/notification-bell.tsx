@@ -4,6 +4,7 @@ import { useState, useRef, useEffect } from 'react';
 import { Bell, X, CheckCheck, Package, MessageSquare, ShoppingCart, Megaphone, Gift, Users, AlertCircle, Info } from 'lucide-react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '@/lib/api';
+import { useSSE } from '@/lib/use-sse';
 import { formatDistanceToNow } from 'date-fns';
 
 type NotificationType =
@@ -60,6 +61,10 @@ export function NotificationBell() {
   const [open, setOpen] = useState(false);
   const panelRef = useRef<HTMLDivElement>(null);
   const qc = useQueryClient();
+
+  useSSE({
+    'notification': () => { void qc.invalidateQueries({ queryKey: ['notifications'] }); },
+  });
 
   const { data } = useNotifications();
   const notifications = data?.data ?? [];

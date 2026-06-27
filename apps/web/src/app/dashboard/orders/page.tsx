@@ -2,11 +2,13 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
+import { useQueryClient } from '@tanstack/react-query';
 import { Header } from '@/components/layout/header';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Table, TableHead, TableBody, TableRow, TableHeader, TableCell, TableEmpty } from '@/components/ui/table';
 import { useOrders } from '@/lib/api';
+import { useSSE } from '@/lib/use-sse';
 import { formatCurrency, formatDateTime, platformLabel } from '@/lib/utils';
 
 const STATUS_FILTERS = ['all', 'pending', 'confirmed', 'processing', 'shipped', 'delivered', 'cancelled'];
@@ -14,6 +16,11 @@ const STATUS_FILTERS = ['all', 'pending', 'confirmed', 'processing', 'shipped', 
 export default function OrdersPage() {
   const [page, setPage] = useState(1);
   const [status, setStatus] = useState<string>('all');
+  const qc = useQueryClient();
+
+  useSSE({
+    'order:created': () => { void qc.invalidateQueries({ queryKey: ['orders'] }); },
+  });
 
   const { data, isLoading } = useOrders({
     page,

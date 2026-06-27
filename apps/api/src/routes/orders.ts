@@ -4,6 +4,8 @@ import { validate } from '../middleware/validate';
 import prisma from '../lib/prisma';
 import { buildPaginatedResponse } from '@socialcart/shared';
 import { integrationManager } from '@socialcart/integrations';
+import { notificationService } from '../services/notification.service';
+import { pushToTenant } from './sse';
 
 const router = Router();
 
@@ -138,6 +140,13 @@ router.post('/', validate(createOrderSchema), async (req, res, next) => {
         notes: externalOrder.notes,
       },
     });
+
+    void notificationService.notifyNewOrder(
+      tenantId,
+      order.externalId ?? order.id,
+      `${order.currency} ${Number(order.total).toFixed(2)}`
+    );
+    pushToTenant(tenantId, 'order:created', { orderId: order.id, total: order.total, currency: order.currency });
 
     res.status(201).json({ success: true, data: { order, externalOrder } });
   } catch (err) {

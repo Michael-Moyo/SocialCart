@@ -34,8 +34,8 @@ export function useSSE(handlers: Record<string, EventHandler>) {
 
       es.addEventListener('connected', () => { retryMs = 1000; });
 
-      // Forward named events to registered handlers
-      const eventNames = ['notification', 'conversation:message', 'conversation:status'];
+      // Forward named events to registered handlers — subscribe to all handler keys
+      const eventNames = Object.keys(handlersRef.current);
       for (const name of eventNames) {
         es.addEventListener(name, (e: MessageEvent) => {
           try {
