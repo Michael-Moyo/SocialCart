@@ -119,6 +119,23 @@ enum TeamRole {
   SALES_REP
 }
 
+enum NotificationChannel {
+  IN_APP
+  WHATSAPP
+  PUSH
+}
+
+enum NotificationType {
+  NEW_ORDER
+  NEW_CONVERSATION
+  CONVERSATION_ASSIGNED
+  CART_ABANDONED
+  CAMPAIGN_COMPLETE
+  LOYALTY_TIER_UP
+  TEAM_INVITE
+  SYSTEM
+}
+
 // ─── Models ───────────────────────────────────────────────────────────────────
 
 model Tenant {
@@ -126,7 +143,7 @@ model Tenant {
   name                  String
   phone                 String    @unique
   email                 String?   @unique
-  passwordHash          String
+  passwordHash          String?   // kept for legacy / fallback; primary auth is WhatsApp OTP
   whatsappBusinessId    String?
   whatsappPhoneNumberId String?
   plan                  Plan      @default(FREE)
@@ -135,14 +152,16 @@ model Tenant {
   createdAt             DateTime  @default(now())
   updatedAt             DateTime  @updatedAt
 
-  integrations  Integration[]
-  products      Product[]
-  customers     Customer[]
-  orders        Order[]
-  carts         Cart[]
-  conversations Conversation[]
-  campaigns     Campaign[]
-  teamMembers   TeamMember[]
+  integrations      Integration[]
+  products          Product[]
+  customers         Customer[]
+  orders            Order[]
+  carts             Cart[]
+  conversations     Conversation[]
+  campaigns         Campaign[]
+  teamMembers       TeamMember[]
+  notifications     Notification[]
+  pushSubscriptions PushSubscription[]
 
   @@index([phone])
   @@map("tenants")
@@ -410,4 +429,57 @@ model LoyaltyAccount {
 
   @@index([tenantId])
   @@map("loyalty_accounts")
+}
+
+// WhatsApp OTP codes for tenant authentication
+model OtpCode {
+  id        String   @id @default(uuid())
+  phone     String
+  code      String   // 6-digit, stored hashed
+  expiresAt DateTime
+  used      Boolean  @default(false)
+  attempts  Int      @default(0)
+  createdAt DateTime @default(now())
+
+  @@index([phone])
+  @@map("otp_codes")
+}
+
+// In-app + cross-channel notifications
+model Notification {
+  id        String           @id @default(uuid())
+  tenantId  String
+  memberId  String?          // null = owner-level notification
+  type      NotificationType
+  title     String
+  body      String
+  data      Json             @default("{}")  // extra context (orderId, conversationId, etc.)
+  read      Boolean          @default(false)
+  channels  NotificationChannel[]
+  createdAt DateTime         @default(now())
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@index([tenantId, read])
+  @@index([memberId])
+  @@map("notifications")
+}
+
+// Web Push subscriptions (VAPID)
+model PushSubscription {
+  id        String   @id @default(uuid())
+  tenantId  String
+  memberId  String?
+  endpoint  String   @unique
+  p256dh    String
+  auth      String
+  userAgent String?
+  createdAt DateTime @default(now())
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@index([memberId])
+  @@map("push_subscriptions")
 }

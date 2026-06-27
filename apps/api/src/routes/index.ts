@@ -12,6 +12,7 @@ import campaignRoutes from './campaigns';
 import loyaltyRoutes from './loyalty';
 import teamRoutes from './team';
 import superAdminRoutes from './superadmin';
+import notificationRoutes from './notifications';
 
 const router = Router();
 
@@ -29,6 +30,7 @@ router.use('/settings', authMiddleware, settingsRoutes);
 router.use('/campaigns', authMiddleware, campaignRoutes);
 router.use('/loyalty', authMiddleware, loyaltyRoutes);
 router.use('/team', authMiddleware, teamRoutes);
+router.use('/notifications', authMiddleware, notificationRoutes);
 router.use('/superadmin', superAdminRoutes); // has own auth middleware internally
 
 export default router;
