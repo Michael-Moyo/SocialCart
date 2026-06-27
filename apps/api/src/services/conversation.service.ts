@@ -124,6 +124,39 @@ async function handleCreateOrderAction(
       }
     }
 
+    // Award loyalty points (1 point per NGN 100 spent)
+    const pointsToAward = Math.floor(total / 100);
+    if (pointsToAward > 0) {
+      try {
+        const existing = await prisma.loyaltyAccount.findFirst({ where: { customerId, tenantId } });
+        const newPoints = (existing?.points ?? 0) + pointsToAward;
+        const newTier = newPoints >= 5000 ? 'PLATINUM' : newPoints >= 2000 ? 'GOLD' : newPoints >= 500 ? 'SILVER' : 'BRONZE';
+        const historyEntry = {
+          date: new Date().toISOString(),
+          type: 'award',
+          points: pointsToAward,
+          reason: `Order ${order.id.slice(0, 8).toUpperCase()} via WhatsApp`,
+          balance: newPoints,
+        };
+        const history = [...((existing?.history as unknown[]) ?? []), historyEntry];
+        if (existing) {
+          const updated = await prisma.loyaltyAccount.update({
+            where: { id: existing.id },
+            data: { points: newPoints, tier: newTier as never, history },
+          });
+          if (updated.tier !== existing.tier) {
+            void notificationService.notifyLoyaltyTierUp(tenantId, undefined, (await prisma.customer.findUnique({ where: { id: customerId }, select: { name: true } }))?.name ?? 'Customer', updated.tier);
+          }
+        } else {
+          await prisma.loyaltyAccount.create({
+            data: { customerId, tenantId, points: newPoints, tier: newTier as never, history },
+          });
+        }
+      } catch (loyaltyErr) {
+        console.error('[loyalty award]', loyaltyErr);
+      }
+    }
+
     // Notify owner of new WhatsApp order
     void notificationService.notifyNewOrder(tenantId, order.id.slice(0, 8).toUpperCase(), `NGN ${total.toFixed(2)}`);
   } catch (err) {

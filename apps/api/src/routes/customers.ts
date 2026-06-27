@@ -96,6 +96,40 @@ router.get('/phone/:phone', async (req, res, next) => {
   }
 });
 
+// PATCH /api/v1/customers/:id
+const updateCustomerSchema = z.object({
+  name: z.string().min(1).optional(),
+  email: z.string().email().optional().nullable(),
+  tags: z.array(z.string()).optional(),
+});
+
+router.patch('/:id', validate(updateCustomerSchema), async (req, res, next) => {
+  try {
+    const tenantId = req.tenantId!;
+    const { id } = req.params as { id: string };
+    const body = req.body as z.infer<typeof updateCustomerSchema>;
+
+    const existing = await prisma.customer.findFirst({ where: { id, tenantId } });
+    if (!existing) {
+      res.status(404).json({ success: false, error: 'Customer not found' });
+      return;
+    }
+
+    const customer = await prisma.customer.update({
+      where: { id },
+      data: {
+        ...(body.name !== undefined && { name: body.name }),
+        ...(body.email !== undefined && { email: body.email }),
+        ...(body.tags !== undefined && { tags: body.tags }),
+      },
+    });
+
+    res.json({ success: true, data: customer });
+  } catch (err) {
+    next(err);
+  }
+});
+
 // POST /api/v1/customers
 router.post('/', validate(createSchema), async (req, res, next) => {
   try {

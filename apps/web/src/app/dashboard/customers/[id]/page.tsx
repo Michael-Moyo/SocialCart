@@ -2,11 +2,12 @@
 
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
+import { useState, useRef, KeyboardEvent } from 'react';
 import {
   ArrowLeft, Phone, Mail, Star, ShoppingCart, MessageSquare,
-  Gift, Calendar, Loader2, ExternalLink,
+  Gift, Calendar, Loader2, ExternalLink, Tag, X, Plus,
 } from 'lucide-react';
-import { useCustomerDetail } from '@/lib/api';
+import { useCustomerDetail, useUpdateCustomer } from '@/lib/api';
 import { Badge } from '@/components/ui/badge';
 import { formatCurrency, formatDateTime, formatPhone } from '@/lib/utils';
 import { cn } from '@/lib/utils';
@@ -22,6 +23,29 @@ export default function CustomerDetailPage() {
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
   const { data: customer, isLoading } = useCustomerDetail(id);
+  const updateCustomer = useUpdateCustomer(id);
+  const [tagInput, setTagInput] = useState('');
+  const tagInputRef = useRef<HTMLInputElement>(null);
+
+  function addTag() {
+    const tag = tagInput.trim().toLowerCase();
+    if (!tag || !customer) return;
+    if (customer.tags?.includes(tag)) { setTagInput(''); return; }
+    updateCustomer.mutate({ tags: [...(customer.tags ?? []), tag] });
+    setTagInput('');
+  }
+
+  function removeTag(tag: string) {
+    if (!customer) return;
+    updateCustomer.mutate({ tags: (customer.tags ?? []).filter((t) => t !== tag) });
+  }
+
+  function handleTagKeyDown(e: KeyboardEvent<HTMLInputElement>) {
+    if (e.key === 'Enter' || e.key === ',') { e.preventDefault(); addTag(); }
+    if (e.key === 'Backspace' && !tagInput && customer?.tags?.length) {
+      removeTag(customer.tags[customer.tags.length - 1]!);
+    }
+  }
 
   if (isLoading) {
     return (
@@ -166,6 +190,51 @@ export default function CustomerDetailPage() {
               ))}
             </div>
           )}
+        </div>
+
+        {/* Tags */}
+        <div className="bg-white rounded-xl border border-gray-200 p-5">
+          <h3 className="font-semibold text-gray-900 flex items-center gap-2 mb-3">
+            <Tag className="h-4 w-4 text-gray-500" />
+            Tags
+          </h3>
+          <div
+            className="flex flex-wrap gap-2 min-h-[36px] p-2 rounded-lg border border-gray-200 bg-gray-50 cursor-text"
+            onClick={() => tagInputRef.current?.focus()}
+          >
+            {(customer.tags ?? []).map((tag) => (
+              <span
+                key={tag}
+                className="inline-flex items-center gap-1 text-xs font-medium px-2 py-1 rounded-full bg-[#25D366]/10 text-[#128C7E] border border-[#25D366]/20"
+              >
+                {tag}
+                <button
+                  onClick={(e) => { e.stopPropagation(); removeTag(tag); }}
+                  className="ml-0.5 hover:text-red-500 transition-colors"
+                >
+                  <X className="h-3 w-3" />
+                </button>
+              </span>
+            ))}
+            <input
+              ref={tagInputRef}
+              value={tagInput}
+              onChange={(e) => setTagInput(e.target.value)}
+              onKeyDown={handleTagKeyDown}
+              placeholder={(customer.tags ?? []).length === 0 ? 'Add tags (Enter or comma to add)' : ''}
+              className="flex-1 min-w-[140px] text-xs bg-transparent outline-none text-gray-700 placeholder:text-gray-400"
+            />
+            {tagInput && (
+              <button
+                onClick={addTag}
+                className="flex items-center gap-1 text-xs text-[#25D366] hover:text-[#128C7E] font-medium"
+              >
+                <Plus className="h-3 w-3" />
+                Add
+              </button>
+            )}
+          </div>
+          <p className="text-[11px] text-gray-400 mt-1.5">Press Enter or comma to add a tag. Backspace removes the last tag.</p>
         </div>
 
         {/* Notes / metadata */}

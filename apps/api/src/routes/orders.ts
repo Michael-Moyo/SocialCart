@@ -225,6 +225,49 @@ router.patch('/:id', validate(updateOrderSchema), async (req, res, next) => {
       }
     }
 
+    // Auto-award loyalty points when order is delivered (1 point per NGN 100)
+    if (statusChanged && data.status === 'delivered' && updated.customerId) {
+      const pointsToAward = Math.floor(Number(updated.total) / 100);
+      if (pointsToAward > 0) {
+        void (async () => {
+          try {
+            const existing = await prisma.loyaltyAccount.findFirst({
+              where: { customerId: updated.customerId!, tenantId },
+            });
+            const newPoints = (existing?.points ?? 0) + pointsToAward;
+            const newTier = newPoints >= 5000 ? 'PLATINUM' : newPoints >= 2000 ? 'GOLD' : newPoints >= 500 ? 'SILVER' : 'BRONZE';
+            const historyEntry = {
+              date: new Date().toISOString(),
+              type: 'award',
+              points: pointsToAward,
+              reason: `Order ${(updated.externalId ?? updated.id).slice(0, 8).toUpperCase()} delivered`,
+              balance: newPoints,
+            };
+            const history = [...((existing?.history as unknown[]) ?? []), historyEntry];
+            if (existing) {
+              const loyaltyUpdated = await prisma.loyaltyAccount.update({
+                where: { id: existing.id },
+                data: { points: newPoints, tier: newTier as never, history },
+              });
+              if (loyaltyUpdated.tier !== existing.tier) {
+                void notificationService.notifyLoyaltyTierUp(
+                  tenantId, undefined,
+                  updated.customer?.name ?? 'Customer',
+                  loyaltyUpdated.tier
+                );
+              }
+            } else {
+              await prisma.loyaltyAccount.create({
+                data: { customerId: updated.customerId!, tenantId, points: newPoints, tier: newTier as never, history },
+              });
+            }
+          } catch (loyaltyErr) {
+            console.error('[loyalty award on delivery]', loyaltyErr);
+          }
+        })();
+      }
+    }
+
     res.json({ success: true, data: updated });
   } catch (err) {
     next(err);

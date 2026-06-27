@@ -251,6 +251,20 @@ export function useCustomerDetail(id: string) {
   });
 }
 
+export function useUpdateCustomer(id: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (data: { name?: string; email?: string | null; tags?: string[] }) => {
+      const res = await api.patch<{ success: boolean; data: CustomerDetail }>(`/api/v1/customers/${id}`, data);
+      return res.data.data;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['customer', id] });
+      qc.invalidateQueries({ queryKey: ['customers'] });
+    },
+  });
+}
+
 // ─── Conversations ────────────────────────────────────────────────────────────
 
 export interface ConversationMessage {
