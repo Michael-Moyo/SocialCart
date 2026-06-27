@@ -1,4 +1,5 @@
 import axios from 'axios';
+import { useEffect, useRef } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 
 export const agentApi = axios.create({
@@ -92,7 +93,7 @@ export function useConversations(filter: 'all' | 'mine' | 'open' | 'bot' = 'all'
       );
       return res.data.data;
     },
-    refetchInterval: 5000,
+    refetchInterval: 30000, // SSE handles real-time; this is a fallback
   });
 }
 
@@ -105,8 +106,63 @@ export function useConversation(id: string) {
       );
       return res.data.data;
     },
-    refetchInterval: 3000,
+    refetchInterval: 30000, // SSE handles real-time; this is a fallback
   });
+}
+
+// SSE hook for the agent PWA — invalidates queries on real-time events
+export function useAgentSSE(activeConversationId?: string) {
+  const qc = useQueryClient();
+  const activeRef = useRef(activeConversationId);
+  activeRef.current = activeConversationId;
+
+  useEffect(() => {
+    const token = typeof window !== 'undefined' ? localStorage.getItem('agent_token') : null;
+    if (!token) return;
+
+    const apiBase = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3001';
+    let es: EventSource | null = null;
+    let retryMs = 1000;
+    let retryTimer: ReturnType<typeof setTimeout> | null = null;
+    let unmounted = false;
+
+    function connect() {
+      if (unmounted) return;
+      es = new EventSource(`${apiBase}/api/v1/sse?token=${token}`);
+
+      es.addEventListener('connected', () => { retryMs = 1000; });
+
+      es.addEventListener('conversation:message', (e: MessageEvent) => {
+        try {
+          const data = JSON.parse(e.data as string) as { conversationId: string };
+          void qc.invalidateQueries({ queryKey: ['agent-conversations'] });
+          if (data.conversationId && data.conversationId === activeRef.current) {
+            void qc.invalidateQueries({ queryKey: ['agent-conversation', data.conversationId] });
+          }
+        } catch {}
+      });
+
+      es.addEventListener('conversation:status', () => {
+        void qc.invalidateQueries({ queryKey: ['agent-conversations'] });
+      });
+
+      es.onerror = () => {
+        es?.close();
+        if (!unmounted) {
+          retryTimer = setTimeout(() => { retryMs = Math.min(retryMs * 2, 30000); connect(); }, retryMs);
+        }
+      };
+    }
+
+    connect();
+
+    return () => {
+      unmounted = true;
+      if (retryTimer) clearTimeout(retryTimer);
+      es?.close();
+    };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 }
 
 export function useReply(conversationId: string) {

@@ -1,7 +1,7 @@
 'use client';
 
-import { useState } from 'react';
-import { MessageSquare, User, CheckCircle, Clock, Search, RefreshCw, ChevronRight } from 'lucide-react';
+import { useState, useCallback } from 'react';
+import { MessageSquare, User, CheckCircle, Clock, Search, RefreshCw, ChevronRight, Wifi, WifiOff } from 'lucide-react';
 import { Header } from '@/components/layout/header';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -12,6 +12,8 @@ import {
   type ConversationListItem,
   type ConversationMessage,
 } from '@/lib/api';
+import { useSSE } from '@/lib/use-sse';
+import { useQueryClient } from '@tanstack/react-query';
 import { cn, formatDateTime, formatPhone, truncate } from '@/lib/utils';
 
 const STATUS_FILTERS = ['all', 'OPEN', 'BOT', 'PENDING', 'RESOLVED'];
@@ -183,6 +185,24 @@ export default function ConversationsPage() {
   const [search, setSearch] = useState('');
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [page, setPage] = useState(1);
+  const [sseConnected, setSseConnected] = useState(false);
+  const queryClient = useQueryClient();
+
+  useSSE({
+    'conversation:message': useCallback((data: unknown) => {
+      const d = data as { conversationId: string };
+      // Invalidate both the list and the specific thread
+      void queryClient.invalidateQueries({ queryKey: ['conversations'] });
+      if (d.conversationId) {
+        void queryClient.invalidateQueries({ queryKey: ['conversation', d.conversationId] });
+      }
+      setSseConnected(true);
+    }, [queryClient]),
+    'conversation:status': useCallback(() => {
+      void queryClient.invalidateQueries({ queryKey: ['conversations'] });
+      setSseConnected(true);
+    }, [queryClient]),
+  });
 
   const { data, isLoading, refetch, isFetching } = useConversations({
     page,
@@ -207,6 +227,12 @@ export default function ConversationsPage() {
       <Header
         title="Conversations"
         description="Live WhatsApp conversations from your customers"
+        actions={
+          <span className={cn('flex items-center gap-1.5 text-xs', sseConnected ? 'text-green-600' : 'text-gray-400')}>
+            {sseConnected ? <Wifi className="h-3.5 w-3.5" /> : <WifiOff className="h-3.5 w-3.5" />}
+            {sseConnected ? 'Live' : 'Connecting…'}
+          </span>
+        }
       />
 
       <div className="flex flex-1 overflow-hidden min-h-0">

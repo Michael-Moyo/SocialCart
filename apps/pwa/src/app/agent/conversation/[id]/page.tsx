@@ -8,6 +8,7 @@ import {
   useReply,
   useResolve,
   useTakeOver,
+  useAgentSSE,
   getMessageText,
   getAgentProfile,
   type Message,
@@ -94,6 +95,7 @@ export default function ConversationPage({ params }: PageProps) {
   const reply = useReply(id);
   const resolve = useResolve(id);
   const takeOver = useTakeOver(id);
+  useAgentSSE(id);
 
   const [text, setText] = useState('');
   const [showInfo, setShowInfo] = useState(false);

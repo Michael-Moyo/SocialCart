@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import { formatDistanceToNow } from 'date-fns';
-import { useConversations, getMessageText, type ConversationSummary } from '@/lib/agent-api';
+import { useConversations, useAgentSSE, getMessageText, type ConversationSummary } from '@/lib/agent-api';
 
 type Filter = 'all' | 'mine' | 'open' | 'bot';
 
@@ -23,6 +23,7 @@ const FILTER_LABELS: { key: Filter; label: string }[] = [
 
 export default function AgentConversationsPage() {
   const [filter, setFilter] = useState<Filter>('all');
+  useAgentSSE();
   const [search, setSearch] = useState('');
   const { data: conversations = [], isLoading } = useConversations(filter);
 

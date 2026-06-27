@@ -16,6 +16,7 @@ import {
   UsersRound,
   BarChart2,
   CreditCard,
+  Rocket,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -32,6 +33,7 @@ const navItems = [
   { href: '/dashboard/payments', label: 'Payments', icon: CreditCard },
   { href: '/dashboard/team', label: 'Team', icon: UsersRound },
   { href: '/dashboard/settings', label: 'Settings', icon: Settings },
+  { href: '/dashboard/onboarding', label: 'Setup Guide', icon: Rocket },
 ];
 
 export function Sidebar() {
