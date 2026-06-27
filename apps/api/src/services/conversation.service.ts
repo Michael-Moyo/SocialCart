@@ -25,7 +25,7 @@ function buildEngine(): FlowEngine {
 
 const engine = buildEngine();
 
-async function getWhatsAppClient(tenantId: string): Promise<WhatsAppClient> {
+export async function getWhatsAppClient(tenantId: string): Promise<WhatsAppClient> {
   const tenant = await prisma.tenant.findUnique({
     where: { id: tenantId },
     select: { whatsappPhoneNumberId: true, settings: true },

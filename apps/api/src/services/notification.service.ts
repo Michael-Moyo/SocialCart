@@ -1,7 +1,7 @@
 import { EventEmitter } from 'events';
 import webpush from 'web-push';
 import prisma from '../lib/prisma';
-import { whatsappClient } from '../lib/whatsapp-client';
+import { getWhatsAppClient } from './conversation.service';
 import type { NotificationType } from '@prisma/client';
 
 // Configure VAPID once at startup
@@ -105,7 +105,8 @@ class NotificationService extends EventEmitter {
 
     const template = WA_TEMPLATES[payload.type];
     const message = template ? template(payload) : `*${payload.title}*\n${payload.body}`;
-    await whatsappClient.sendNotification(tenant.phone, message);
+    const client = await getWhatsAppClient(payload.tenantId);
+    await client.sendTextMessage(tenant.phone, message);
   }
 
   // ─── Convenience emitters (called from other services) ────────────────────

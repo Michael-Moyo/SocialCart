@@ -1,9 +1,53 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
 import Link from 'next/link';
-import { isLoggedIn } from '@/lib/agent-api';
+import { isLoggedIn, agentApi } from '@/lib/agent-api';
+
+function AgentPushManager() {
+  const registered = useRef(false);
+  useEffect(() => {
+    if (registered.current || !isLoggedIn()) return;
+    if (!('serviceWorker' in navigator) || !('PushManager' in window)) return;
+    registered.current = true;
+
+    (async () => {
+      try {
+        const { data: vapidData } = await agentApi.get<{ success: boolean; data: { publicKey: string } }>(
+          '/api/v1/notifications/push/vapid-key'
+        );
+        const publicKey = vapidData.data.publicKey;
+        if (!publicKey) return;
+
+        const permission = await Notification.requestPermission();
+        if (permission !== 'granted') return;
+
+        const reg = await navigator.serviceWorker.ready;
+        let sub = await reg.pushManager.getSubscription();
+        if (!sub) {
+          const key = urlBase64ToUint8Array(publicKey);
+          sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: key });
+        }
+        const json = sub.toJSON();
+        await agentApi.post('/api/v1/notifications/push/subscribe', {
+          endpoint: sub.endpoint,
+          keys: { p256dh: json.keys?.['p256dh'], auth: json.keys?.['auth'] },
+          userAgent: navigator.userAgent,
+        });
+      } catch {
+        // best-effort
+      }
+    })();
+  }, []);
+  return null;
+}
+
+function urlBase64ToUint8Array(base64: string): Uint8Array {
+  const padding = '='.repeat((4 - (base64.length % 4)) % 4);
+  const b64 = (base64 + padding).replace(/-/g, '+').replace(/_/g, '/');
+  return Uint8Array.from([...atob(b64)].map((c) => c.charCodeAt(0)));
+}
 
 export default function AgentLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter();
@@ -24,6 +68,7 @@ export default function AgentLayout({ children }: { children: React.ReactNode })
 
   return (
     <div className="flex flex-col h-screen bg-white overflow-hidden">
+      <AgentPushManager />
       <main className="flex-1 overflow-hidden">{children}</main>
 
       {/* Bottom nav — hidden when in thread view (full-screen) */}

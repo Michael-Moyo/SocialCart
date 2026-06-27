@@ -28,6 +28,7 @@ export const viewport: Viewport = {
 };
 
 import { Providers } from './providers';
+import { SwRegistrar } from './sw-registrar';
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
@@ -37,7 +38,10 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <meta name="mobile-web-app-capable" content="yes" />
       </head>
       <body className="h-full bg-[#ECE5DD]">
-        <Providers>{children}</Providers>
+        <Providers>
+          <SwRegistrar />
+          {children}
+        </Providers>
       </body>
     </html>
   );

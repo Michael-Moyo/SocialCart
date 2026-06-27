@@ -2,6 +2,7 @@ import { Router, Request, Response } from 'express';
 import { z } from 'zod';
 import prisma from '../lib/prisma';
 import { validate } from '../middleware/validate';
+import { dispatchCampaign } from '../services/campaign.service';
 
 const router = Router();
 
@@ -123,11 +124,13 @@ router.post('/:id/launch', async (req: Request, res: Response) => {
     return;
   }
 
-  // Mark as running — actual sending is handled by a background job
   const updated = await prisma.campaign.update({
     where: { id },
     data: { status: 'RUNNING', sentAt: new Date() },
   });
+
+  // Fire and forget — dispatch runs async, campaign status updates on completion
+  void dispatchCampaign(id);
 
   res.json({ success: true, data: updated });
 });
