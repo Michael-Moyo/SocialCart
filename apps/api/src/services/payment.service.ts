@@ -1,6 +1,7 @@
 import axios from 'axios';
 import crypto from 'crypto';
 import prisma from '../lib/prisma';
+import { decrypt } from '../lib/encryption';
 import { notificationService } from './notification.service';
 import { whatsappClient } from '../lib/whatsapp-client';
 
@@ -111,11 +112,32 @@ async function createFlutterwaveLink(opts: CreatePaymentLinkOptions): Promise<Pa
 // ─── Payment Service ──────────────────────────────────────────────────────────
 
 class PaymentService {
-  /** Detect which provider is configured for a tenant (env-based for now) */
-  private detectProvider(tenantId: string): PaymentProvider {
-    void tenantId;
-    if (process.env['PAYSTACK_SECRET_KEY']) return 'PAYSTACK';
-    if (process.env['FLUTTERWAVE_SECRET_KEY']) return 'FLUTTERWAVE';
+  /** Resolve Paystack secret key for tenant (DB setting takes priority over env) */
+  private async getPaystackKey(tenantId: string): Promise<string | null> {
+    const tenant = await prisma.tenant.findUnique({ where: { id: tenantId }, select: { settings: true } });
+    const s = (tenant?.settings ?? {}) as Record<string, unknown>;
+    if (s['paystackSecretKeyEnc']) {
+      try { return decrypt(s['paystackSecretKeyEnc'] as string); } catch {}
+    }
+    return process.env['PAYSTACK_SECRET_KEY'] ?? null;
+  }
+
+  private async getFlutterwaveKey(tenantId: string): Promise<string | null> {
+    const tenant = await prisma.tenant.findUnique({ where: { id: tenantId }, select: { settings: true } });
+    const s = (tenant?.settings ?? {}) as Record<string, unknown>;
+    if (s['flutterwaveSecretKeyEnc']) {
+      try { return decrypt(s['flutterwaveSecretKeyEnc'] as string); } catch {}
+    }
+    return process.env['FLUTTERWAVE_SECRET_KEY'] ?? null;
+  }
+
+  /** Detect which provider is configured for a tenant */
+  private async detectProvider(tenantId: string): Promise<PaymentProvider> {
+    const tenant = await prisma.tenant.findUnique({ where: { id: tenantId }, select: { settings: true } });
+    const s = (tenant?.settings ?? {}) as Record<string, unknown>;
+    if (s['provider']) return s['provider'] as PaymentProvider;
+    if (s['paystackSecretKeyEnc'] || process.env['PAYSTACK_SECRET_KEY']) return 'PAYSTACK';
+    if (s['flutterwaveSecretKeyEnc'] || process.env['FLUTTERWAVE_SECRET_KEY']) return 'FLUTTERWAVE';
     return 'MANUAL';
   }
 
@@ -124,7 +146,7 @@ class PaymentService {
     reference: string;
     paymentLinkId: string;
   }> {
-    const provider = opts.provider ?? this.detectProvider(opts.tenantId);
+    const provider = opts.provider ?? await this.detectProvider(opts.tenantId);
     const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24h
 
     let result: PaymentLinkResult;

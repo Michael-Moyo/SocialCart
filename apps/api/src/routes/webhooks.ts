@@ -4,6 +4,7 @@ import { parseWebhookPayload, extractMessageText, extractInteractiveReplyId } fr
 import prisma from '../lib/prisma';
 import { conversationService } from '../services/conversation.service';
 import { notificationService } from '../services/notification.service';
+import { pushToTenant } from './sse';
 
 const router = Router();
 
@@ -110,6 +111,15 @@ async function processWhatsAppEvent(event: ReturnType<typeof parseWebhookPayload
       messageText,
       event.messageId
     );
+
+    // Push real-time SSE event so dashboard updates instantly (no polling needed)
+    if (conversation) {
+      pushToTenant(tenantId, 'conversation:message', {
+        conversationId: conversation.id,
+        direction: 'INBOUND',
+        text: messageText,
+      });
+    }
 
     // Notify assigned agent (or all agents) about the new inbound message
     if (conversation && messageText) {

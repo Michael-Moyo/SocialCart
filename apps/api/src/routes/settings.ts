@@ -165,4 +165,74 @@ router.patch('/bot', validate(botSchema), async (req: Request, res: Response) =>
   res.json({ success: true, data: updated });
 });
 
+// PATCH /api/v1/settings/payments
+const paymentsSchema = z.object({
+  provider: z.enum(['PAYSTACK', 'FLUTTERWAVE', 'MANUAL']).optional(),
+  paystackSecretKey: z.string().optional(),
+  paystackPublicKey: z.string().optional(),
+  flutterwaveSecretKey: z.string().optional(),
+  flutterwavePublicKey: z.string().optional(),
+  flutterwaveWebhookHash: z.string().optional(),
+  currency: z.string().length(3).optional(),
+});
+
+router.patch('/payments', validate(paymentsSchema), async (req: Request, res: Response) => {
+  const id = tenantId(req);
+  const { paystackSecretKey, flutterwaveSecretKey, ...rest } = req.body as z.infer<typeof paymentsSchema>;
+
+  const tenant = await prisma.tenant.findUnique({ where: { id }, select: { settings: true } });
+  const existing = (tenant?.settings ?? {}) as Record<string, unknown>;
+
+  const settingsUpdate: Record<string, unknown> = { ...existing, ...rest };
+  if (paystackSecretKey) settingsUpdate['paystackSecretKeyEnc'] = encrypt(paystackSecretKey);
+  if (flutterwaveSecretKey) settingsUpdate['flutterwaveSecretKeyEnc'] = encrypt(flutterwaveSecretKey);
+
+  await prisma.tenant.update({ where: { id }, data: { settings: settingsUpdate } });
+
+  res.json({ success: true, message: 'Payment settings saved' });
+});
+
+// GET /api/v1/settings/onboarding — returns which setup steps are complete
+router.get('/onboarding', async (req: Request, res: Response) => {
+  const id = tenantId(req);
+
+  const tenant = await prisma.tenant.findUnique({
+    where: { id },
+    select: {
+      name: true,
+      email: true,
+      whatsappPhoneNumberId: true,
+      settings: true,
+      _count: { select: { integrations: true, products: true, teamMembers: true } },
+    },
+  });
+
+  if (!tenant) { res.status(404).json({ success: false, error: 'Not found' }); return; }
+
+  const s = (tenant.settings ?? {}) as Record<string, unknown>;
+
+  const steps = {
+    profile: Boolean(tenant.name && tenant.email),
+    whatsapp: Boolean(tenant.whatsappPhoneNumberId && s['waAccessTokenEnc']),
+    integration: tenant._count.integrations > 0,
+    products: tenant._count.products > 0,
+    payments: Boolean(s['paystackSecretKeyEnc'] || s['flutterwaveSecretKeyEnc'] || s['provider'] === 'MANUAL'),
+    team: tenant._count.teamMembers > 0,
+  };
+
+  const completed = Object.values(steps).filter(Boolean).length;
+  const total = Object.keys(steps).length;
+
+  res.json({ success: true, data: { steps, completed, total, pct: Math.round((completed / total) * 100) } });
+});
+
+// PATCH /api/v1/settings/onboarding/complete — mark onboarding dismissed
+router.patch('/onboarding/complete', async (req: Request, res: Response) => {
+  const id = tenantId(req);
+  const tenant = await prisma.tenant.findUnique({ where: { id }, select: { settings: true } });
+  const existing = (tenant?.settings ?? {}) as Record<string, unknown>;
+  await prisma.tenant.update({ where: { id }, data: { settings: { ...existing, onboardingComplete: true } } });
+  res.json({ success: true });
+});
+
 export default router;

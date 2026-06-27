@@ -1,6 +1,7 @@
 import { Router, Request, Response } from 'express';
 import axios from 'axios';
 import prisma from '../lib/prisma';
+import { pushToTenant } from './sse';
 
 const GRAPH_URL = 'https://graph.facebook.com/v19.0';
 
@@ -144,6 +145,13 @@ router.post('/:id/reply', async (req: Request, res: Response) => {
   await prisma.conversation.update({
     where: { id },
     data: { status: 'OPEN', updatedAt: new Date() },
+  });
+
+  // Push SSE so all open dashboard tabs see the reply immediately
+  pushToTenant(tenantId, 'conversation:message', {
+    conversationId: id,
+    direction: 'OUTBOUND',
+    text: text.trim(),
   });
 
   res.json({ success: true, data: message });

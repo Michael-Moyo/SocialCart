@@ -15,6 +15,7 @@ import superAdminRoutes from './superadmin';
 import notificationRoutes from './notifications';
 import paymentRoutes from './payments';
 import analyticsRoutes from './analytics';
+import sseRoutes from './sse';
 
 const router = Router();
 
@@ -35,6 +36,7 @@ router.use('/team', authMiddleware, teamRoutes);
 router.use('/notifications', authMiddleware, notificationRoutes);
 router.use('/payments', paymentRoutes);       // mixed: some routes have own authMiddleware, webhooks are public
 router.use('/analytics', authMiddleware, analyticsRoutes);
+router.use('/sse', sseRoutes);               // SSE stream (auth handled inside)
 router.use('/superadmin', superAdminRoutes); // has own auth middleware internally
 
 export default router;
