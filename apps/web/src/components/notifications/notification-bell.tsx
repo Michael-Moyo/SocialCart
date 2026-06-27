@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useRef, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import { Bell, X, CheckCheck, Package, MessageSquare, ShoppingCart, Megaphone, Gift, Users, AlertCircle, Info } from 'lucide-react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '@/lib/api';
@@ -10,7 +11,7 @@ import { formatDistanceToNow } from 'date-fns';
 type NotificationType =
   | 'NEW_ORDER' | 'NEW_CONVERSATION' | 'CONVERSATION_ASSIGNED'
   | 'CART_ABANDONED' | 'CAMPAIGN_COMPLETE' | 'LOYALTY_TIER_UP'
-  | 'TEAM_INVITE' | 'SYSTEM';
+  | 'LOW_STOCK' | 'TEAM_INVITE' | 'SYSTEM';
 
 interface Notification {
   id: string;
@@ -29,6 +30,7 @@ const TYPE_ICON: Record<NotificationType, React.ElementType> = {
   CART_ABANDONED: ShoppingCart,
   CAMPAIGN_COMPLETE: Megaphone,
   LOYALTY_TIER_UP: Gift,
+  LOW_STOCK: AlertCircle,
   TEAM_INVITE: Users,
   SYSTEM: Info,
 };
@@ -40,9 +42,24 @@ const TYPE_COLOR: Record<NotificationType, string> = {
   CART_ABANDONED: 'text-orange-400 bg-orange-400/10',
   CAMPAIGN_COMPLETE: 'text-purple-400 bg-purple-400/10',
   LOYALTY_TIER_UP: 'text-yellow-400 bg-yellow-400/10',
+  LOW_STOCK: 'text-red-400 bg-red-400/10',
   TEAM_INVITE: 'text-pink-400 bg-pink-400/10',
   SYSTEM: 'text-gray-400 bg-gray-400/10',
 };
+
+function getNotificationHref(n: { type: NotificationType; data: Record<string, unknown> }): string | null {
+  switch (n.type) {
+    case 'NEW_ORDER': return n.data['orderRef'] ? `/dashboard/orders` : null;
+    case 'NEW_CONVERSATION':
+    case 'CONVERSATION_ASSIGNED': return n.data['conversationId'] ? `/dashboard/conversations` : null;
+    case 'CART_ABANDONED': return `/dashboard/customers`;
+    case 'CAMPAIGN_COMPLETE': return `/dashboard/campaigns`;
+    case 'LOYALTY_TIER_UP': return `/dashboard/loyalty`;
+    case 'LOW_STOCK': return `/dashboard/products`;
+    case 'TEAM_INVITE': return `/dashboard/team`;
+    default: return null;
+  }
+}
 
 function useNotifications() {
   return useQuery({
@@ -61,6 +78,7 @@ export function NotificationBell() {
   const [open, setOpen] = useState(false);
   const panelRef = useRef<HTMLDivElement>(null);
   const qc = useQueryClient();
+  const router = useRouter();
 
   useSSE({
     'notification': () => { void qc.invalidateQueries({ queryKey: ['notifications'] }); },
@@ -139,8 +157,12 @@ export function NotificationBell() {
                 return (
                   <div
                     key={n.id}
-                    className={`flex gap-3 px-4 py-3 hover:bg-gray-800/50 transition-colors group ${!n.read ? 'bg-gray-800/30' : ''}`}
-                    onClick={() => { if (!n.read) markRead.mutate(n.id); }}
+                    className={`flex gap-3 px-4 py-3 hover:bg-gray-800/50 transition-colors group cursor-pointer ${!n.read ? 'bg-gray-800/30' : ''}`}
+                    onClick={() => {
+                      if (!n.read) markRead.mutate(n.id);
+                      const href = getNotificationHref(n);
+                      if (href) { setOpen(false); router.push(href); }
+                    }}
                   >
                     <div className={`flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center ${colorClass}`}>
                       <Icon className="h-4 w-4" />

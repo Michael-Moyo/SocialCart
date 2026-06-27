@@ -18,7 +18,6 @@ export default function AgentLoginPage() {
 
   // OTP state
   const [phone, setPhone] = useState('');
-  const [tenantId, setTenantId] = useState('');
   const [otpSent, setOtpSent] = useState(false);
   const [otp, setOtp] = useState('');
   const [resendCooldown, setResendCooldown] = useState(0);
@@ -53,8 +52,7 @@ export default function AgentLoginPage() {
     e.preventDefault();
     setError(''); setLoading(true);
     try {
-      // Agents use the tenant OTP endpoint — they receive OTP as team member
-      await api.post('/api/v1/auth/otp/request', { phone });
+      await api.post('/api/v1/team/otp/request', { phone });
       setOtpSent(true);
       startCooldown();
     } catch (err: unknown) {
@@ -68,21 +66,15 @@ export default function AgentLoginPage() {
     e.preventDefault();
     setError(''); setLoading(true);
     try {
-      // Try team member OTP verify first (future), fall back to tenant token
-      const res = await api.post<{ success: boolean; data: { token: string; tenant?: { id: string; name: string } } }>(
-        '/api/v1/auth/otp/verify',
-        { phone, code: otp }
-      );
-      // Store as agent token — this gives tenant-level access
+      const res = await api.post<{
+        success: boolean;
+        data: {
+          token: string;
+          member: { id: string; name: string; email: string | null; phone: string | null; role: string; tenantId: string };
+        };
+      }>('/api/v1/team/otp/verify', { phone, code: otp });
       localStorage.setItem('agent_token', res.data.data.token);
-      localStorage.setItem('agent_profile', JSON.stringify({
-        id: 'owner',
-        name: res.data.data.tenant?.name ?? 'Owner',
-        role: 'OWNER',
-        tenantId: res.data.data.tenant?.id ?? '',
-        email: null,
-        phone,
-      }));
+      localStorage.setItem('agent_profile', JSON.stringify(res.data.data.member));
       router.push('/agent');
     } catch (err: unknown) {
       setError((err as { response?: { data?: { error?: string } } })?.response?.data?.error ?? 'Invalid OTP');
@@ -197,7 +189,7 @@ export default function AgentLoginPage() {
                     disabled={resendCooldown > 0}
                     onClick={async () => {
                       setLoading(true);
-                      try { await api.post('/api/v1/auth/otp/request', { phone }); startCooldown(); } catch {}
+                      try { await api.post('/api/v1/team/otp/request', { phone }); startCooldown(); } catch {}
                       setLoading(false);
                     }}
                     className="text-[#25D366] disabled:opacity-50"
