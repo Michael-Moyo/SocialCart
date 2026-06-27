@@ -2,6 +2,7 @@ import { Router, Request, Response } from 'express';
 import axios from 'axios';
 import prisma from '../lib/prisma';
 import { pushToTenant } from './sse';
+import { notificationService } from '../services/notification.service';
 
 const GRAPH_URL = 'https://graph.facebook.com/v19.0';
 
@@ -96,10 +97,21 @@ router.post('/:id/assign', async (req: Request, res: Response) => {
     return;
   }
 
+  const agent = await prisma.teamMember.findFirst({ where: { id: agentId, tenantId } });
+  if (!agent) {
+    res.status(404).json({ success: false, error: 'Agent not found' });
+    return;
+  }
+
   const updated = await prisma.conversation.update({
     where: { id },
-    data: { assignedTo: agentId, status: 'OPEN' },
+    data: { assignedTo: agent.name, assignedMemberId: agentId, status: 'OPEN' },
   });
+
+  void notificationService.notifyConversationAssigned(
+    tenantId, agentId, id, conversation.waNumber
+  );
+  pushToTenant(tenantId, 'conversation:assigned', { conversationId: id, agentId, agentName: agent.name });
 
   res.json({ success: true, data: updated });
 });

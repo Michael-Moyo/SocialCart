@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useCallback, useRef, useEffect } from 'react';
-import { MessageSquare, User, CheckCircle, Clock, Search, RefreshCw, ChevronRight, Wifi, WifiOff, Send } from 'lucide-react';
+import { MessageSquare, User, CheckCircle, Clock, Search, RefreshCw, ChevronRight, Wifi, WifiOff, Send, UserPlus } from 'lucide-react';
 import { Header } from '@/components/layout/header';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -10,11 +10,13 @@ import {
   useConversation,
   useResolveConversation,
   useReplyConversation,
+  useAssignConversation,
   type ConversationListItem,
   type ConversationMessage,
 } from '@/lib/api';
 import { useSSE } from '@/lib/use-sse';
-import { useQueryClient } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import api from '@/lib/api';
 import { cn, formatDateTime, formatPhone, truncate } from '@/lib/utils';
 
 const STATUS_FILTERS = ['all', 'OPEN', 'BOT', 'PENDING', 'RESOLVED'];
@@ -106,6 +108,61 @@ function MessageBubble({ msg }: { msg: ConversationMessage }) {
 
 // ─── Conversation Thread ──────────────────────────────────────────────────────
 
+function useTeamMembers() {
+  return useQuery({
+    queryKey: ['team-members-select'],
+    queryFn: async () => {
+      const res = await api.get<{ success: boolean; data: Array<{ id: string; name: string; role: string }> }>('/api/v1/team');
+      return res.data.data;
+    },
+    staleTime: 60_000,
+  });
+}
+
+function AssignButton({ conversationId, currentAssignment }: { conversationId: string; currentAssignment?: string | null }) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+  const { data: members = [] } = useTeamMembers();
+  const assign = useAssignConversation();
+
+  useEffect(() => {
+    function handler(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    }
+    if (open) document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [open]);
+
+  return (
+    <div className="relative" ref={ref}>
+      <Button size="sm" variant="outline" onClick={() => setOpen((o) => !o)}>
+        <UserPlus className="h-3.5 w-3.5 mr-1" />
+        {currentAssignment ? 'Reassign' : 'Assign'}
+      </Button>
+      {open && (
+        <div className="absolute right-0 top-full mt-1 w-48 bg-white border border-gray-200 rounded-xl shadow-lg z-20 py-1 overflow-hidden">
+          {members.length === 0 && (
+            <p className="px-3 py-2 text-xs text-gray-400">No team members</p>
+          )}
+          {members.map((m) => (
+            <button
+              key={m.id}
+              onClick={() => {
+                assign.mutate({ id: conversationId, agentId: m.id });
+                setOpen(false);
+              }}
+              className="w-full text-left px-3 py-2 text-sm hover:bg-gray-50 transition-colors flex items-center justify-between"
+            >
+              <span className="text-gray-800">{m.name}</span>
+              <span className="text-xs text-gray-400">{m.role}</span>
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function ConversationThread({ id }: { id: string }) {
   const { data: convo, isLoading } = useConversation(id);
   const resolve = useResolveConversation();
@@ -165,15 +222,18 @@ function ConversationThread({ id }: { id: string }) {
         <div className="flex items-center gap-2">
           <Badge status={convo.status} />
           {convo.status !== 'RESOLVED' && (
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={() => resolve.mutate(convo.id)}
-              disabled={resolve.isPending}
-            >
-              <CheckCircle className="h-3.5 w-3.5 mr-1" />
-              Resolve
-            </Button>
+            <>
+              <AssignButton conversationId={convo.id} currentAssignment={convo.assignedTo} />
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => resolve.mutate(convo.id)}
+                disabled={resolve.isPending}
+              >
+                <CheckCircle className="h-3.5 w-3.5 mr-1" />
+                Resolve
+              </Button>
+            </>
           )}
         </div>
       </div>
