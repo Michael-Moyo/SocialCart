@@ -25,11 +25,22 @@ function buildEngine(): FlowEngine {
 
 const engine = buildEngine();
 
-function getWhatsAppClient(tenantId: string): WhatsAppClient {
-  void tenantId;
+async function getWhatsAppClient(tenantId: string): Promise<WhatsAppClient> {
+  const tenant = await prisma.tenant.findUnique({
+    where: { id: tenantId },
+    select: { whatsappPhoneNumberId: true, settings: true },
+  });
+  const s = (tenant?.settings ?? {}) as Record<string, unknown>;
+  let accessToken = process.env['WHATSAPP_ACCESS_TOKEN'] ?? '';
+  if (s['waAccessTokenEnc']) {
+    try {
+      const { decrypt } = await import('../lib/encryption');
+      accessToken = decrypt(s['waAccessTokenEnc'] as string);
+    } catch {}
+  }
   return new WhatsAppClient({
-    accessToken: process.env['WHATSAPP_ACCESS_TOKEN'] ?? '',
-    phoneNumberId: process.env['WHATSAPP_PHONE_NUMBER_ID'] ?? '',
+    accessToken,
+    phoneNumberId: tenant?.whatsappPhoneNumberId ?? process.env['WHATSAPP_PHONE_NUMBER_ID'] ?? '',
   });
 }
 
@@ -100,7 +111,7 @@ export const conversationService = {
 
     const { actions, newCtx } = await engine.process(message, ctx);
 
-    const client = getWhatsAppClient(tenantId);
+    const client = await getWhatsAppClient(tenantId);
 
     for (const action of actions) {
       if (action.type === 'send_text') {
@@ -176,7 +187,7 @@ export const conversationService = {
 
     const { actions, newCtx } = await engine.startFlow('cart-recovery', ctx);
 
-    const client = getWhatsAppClient(tenantId);
+    const client = await getWhatsAppClient(tenantId);
 
     for (const action of actions) {
       if (action.type === 'send_text') {

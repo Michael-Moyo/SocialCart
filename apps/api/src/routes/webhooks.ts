@@ -101,9 +101,18 @@ async function processWhatsAppEvent(event: ReturnType<typeof parseWebhookPayload
       extractMessageText(event.message) ??
       '';
 
-    // Derive tenantId from the phone number ID stored in the webhook metadata
-    // For now fall back to env var; production should look up by phoneNumberId
-    const tenantId = process.env['DEFAULT_TENANT_ID'] ?? 'default';
+    // Look up tenant by the WhatsApp phone number ID from webhook metadata
+    const phoneNumberId = (event as { phoneNumberId?: string }).phoneNumberId
+      ?? process.env['WHATSAPP_PHONE_NUMBER_ID'];
+    let tenantId: string | null = null;
+    if (phoneNumberId) {
+      const tenant = await prisma.tenant.findFirst({
+        where: { whatsappPhoneNumberId: phoneNumberId },
+        select: { id: true },
+      });
+      tenantId = tenant?.id ?? null;
+    }
+    if (!tenantId) tenantId = process.env['DEFAULT_TENANT_ID'] ?? 'default';
 
     const conversation = await conversationService.handleIncoming(
       tenantId,

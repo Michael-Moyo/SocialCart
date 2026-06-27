@@ -131,6 +131,43 @@ export function useIntegrations() {
   });
 }
 
+export function useCreateProduct() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (data: {
+      name: string; description?: string; sku?: string; price: number;
+      compareAtPrice?: number; currency?: string; inventory?: number;
+      categories?: string[]; status?: string;
+    }) => {
+      const res = await api.post('/api/v1/products', data);
+      return res.data;
+    },
+    onSuccess: () => void qc.invalidateQueries({ queryKey: ['products'] }),
+  });
+}
+
+export function useUpdateProduct(id: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (data: { name?: string; description?: string; price?: number; inventory?: number; status?: string; categories?: string[] }) => {
+      const res = await api.patch(`/api/v1/products/${id}`, data);
+      return res.data;
+    },
+    onSuccess: () => void qc.invalidateQueries({ queryKey: ['products'] }),
+  });
+}
+
+export function useDeleteProduct() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: string) => {
+      const res = await api.delete(`/api/v1/products/${id}`);
+      return res.data;
+    },
+    onSuccess: () => void qc.invalidateQueries({ queryKey: ['products'] }),
+  });
+}
+
 export function useProducts(params: { page?: number; limit?: number; search?: string; status?: string } = {}) {
   return useQuery({
     queryKey: ['products', params],
