@@ -159,6 +159,91 @@ export function useCustomers(params: { page?: number; limit?: number; search?: s
   });
 }
 
+// ─── Conversations ────────────────────────────────────────────────────────────
+
+export interface ConversationMessage {
+  id: string;
+  direction: 'INBOUND' | 'OUTBOUND';
+  type: string;
+  content: Record<string, unknown>;
+  waMessageId: string | null;
+  sentAt: string;
+  status: string;
+}
+
+export interface Conversation {
+  id: string;
+  waNumber: string;
+  status: string;
+  assignedTo: string | null;
+  customer: { id: string; name: string; phone: string } | null;
+  messages: ConversationMessage[];
+  _count?: { messages: number };
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ConversationListItem extends Omit<Conversation, 'messages'> {
+  messages: ConversationMessage[];
+}
+
+export function useConversations(params: { page?: number; limit?: number; status?: string } = {}) {
+  return useQuery({
+    queryKey: ['conversations', params],
+    queryFn: async () => {
+      const res = await api.get<{
+        success: boolean;
+        data: ConversationListItem[];
+        pagination: { page: number; limit: number; total: number; pages: number };
+      }>('/api/v1/conversations', { params });
+      return res.data;
+    },
+    refetchInterval: 8000,
+  });
+}
+
+export function useConversation(id: string | null) {
+  return useQuery({
+    queryKey: ['conversation', id],
+    queryFn: async () => {
+      const res = await api.get<{ success: boolean; data: Conversation }>(
+        `/api/v1/conversations/${id}`
+      );
+      return res.data.data;
+    },
+    enabled: !!id,
+    refetchInterval: 5000,
+  });
+}
+
+export function useResolveConversation() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: string) => {
+      const res = await api.post(`/api/v1/conversations/${id}/resolve`);
+      return res.data;
+    },
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ['conversations'] });
+      void qc.invalidateQueries({ queryKey: ['conversation'] });
+    },
+  });
+}
+
+export function useAssignConversation() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, agentId }: { id: string; agentId: string }) => {
+      const res = await api.post(`/api/v1/conversations/${id}/assign`, { agentId });
+      return res.data;
+    },
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ['conversations'] });
+      void qc.invalidateQueries({ queryKey: ['conversation'] });
+    },
+  });
+}
+
 export function useSyncIntegration() {
   const qc = useQueryClient();
   return useMutation({

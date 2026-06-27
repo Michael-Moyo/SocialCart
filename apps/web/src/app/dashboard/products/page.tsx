@@ -27,7 +27,7 @@ export default function ProductsPage() {
   };
 
   return (
-    <div>
+    <div className="flex-1 overflow-y-auto">
       <Header title="Products" description="Synced products from your connected platforms" />
 
       <div className="p-6 space-y-4">

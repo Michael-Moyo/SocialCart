@@ -21,7 +21,7 @@ export default function OrdersPage() {
   });
 
   return (
-    <div>
+    <div className="flex-1 overflow-y-auto">
       <Header title="Orders" description="All orders from your connected platforms" />
 
       <div className="p-6 space-y-4">

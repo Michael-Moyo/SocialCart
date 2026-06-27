@@ -29,7 +29,7 @@ export default function IntegrationsPage() {
   };
 
   return (
-    <div>
+    <div className="flex-1 overflow-y-auto">
       <Header
         title="Integrations"
         description="Connect your eCommerce platforms and ERP systems"

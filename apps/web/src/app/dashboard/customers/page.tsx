@@ -16,7 +16,7 @@ export default function CustomersPage() {
   const { data, isLoading } = useCustomers({ page, limit: 20, search: search || undefined });
 
   return (
-    <div>
+    <div className="flex-1 overflow-y-auto">
       <Header title="Customers" description="All customers across your connected platforms" />
 
       <div className="p-6 space-y-4">

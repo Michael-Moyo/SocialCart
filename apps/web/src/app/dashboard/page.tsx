@@ -18,7 +18,7 @@ export default function DashboardPage() {
   const activeIntegrations = integrations?.filter((i) => i.status === 'ACTIVE').length ?? 0;
 
   return (
-    <div>
+    <div className="flex-1 overflow-y-auto">
       <Header
         title="Dashboard"
         description="Welcome back. Here's what's happening with your store."
