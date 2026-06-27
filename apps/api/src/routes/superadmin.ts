@@ -165,4 +165,25 @@ router.post('/tenants/:id/impersonate', async (req: Request, res: Response) => {
   res.json({ success: true, data: { token, tenant: { id: tenant.id, name: tenant.name } } });
 });
 
+// GET /api/v1/superadmin/activity — latest signups and orders across all tenants
+router.get('/activity', async (_req: Request, res: Response) => {
+  const [recentTenants, recentOrders] = await Promise.all([
+    prisma.tenant.findMany({
+      orderBy: { createdAt: 'desc' },
+      take: 10,
+      select: { id: true, name: true, phone: true, plan: true, createdAt: true },
+    }),
+    prisma.order.findMany({
+      orderBy: { createdAt: 'desc' },
+      take: 10,
+      select: {
+        id: true, total: true, currency: true, status: true, createdAt: true,
+        tenant: { select: { name: true } },
+        customer: { select: { name: true } },
+      },
+    }),
+  ]);
+  res.json({ success: true, data: { recentTenants, recentOrders } });
+});
+
 export default router;

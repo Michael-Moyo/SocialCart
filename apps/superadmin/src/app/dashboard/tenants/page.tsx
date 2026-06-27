@@ -1,8 +1,9 @@
 'use client';
 
 import { useState } from 'react';
+import Link from 'next/link';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Search, CheckCircle, XCircle, ExternalLink, ChevronUp, ChevronDown, Zap } from 'lucide-react';
+import { Search, CheckCircle, XCircle, ChevronUp, ChevronDown, Zap } from 'lucide-react';
 import axios from 'axios';
 
 const api = axios.create({ baseURL: process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3001' });
@@ -144,10 +145,10 @@ export default function TenantsPage() {
               tenants.map((t) => (
                 <tr key={t.id} className="hover:bg-gray-800/50 transition-colors">
                   <td className="px-5 py-3">
-                    <div>
-                      <p className="text-sm font-semibold text-white">{t.name}</p>
+                    <Link href={`/dashboard/tenants/${t.id}`} className="group block">
+                      <p className="text-sm font-semibold text-white group-hover:text-[#25D366] transition-colors">{t.name}</p>
                       <p className="text-xs text-gray-500">{t.email ?? t.phone}</p>
-                    </div>
+                    </Link>
                   </td>
                   <td className="px-5 py-3"><PlanBadge plan={t.plan} /></td>
                   <td className="px-5 py-3 text-sm text-gray-300">{t._count.customers}</td>
