@@ -63,7 +63,32 @@ export const mainMenuFlow: Flow = {
     ],
   ]),
 
-  onEntry: async (_ctx: FlowContext): Promise<FlowAction[]> => {
+  onEntry: async (ctx: FlowContext): Promise<FlowAction[]> => {
+    const disabled = new Set<string>((ctx.data?.['disabledFlows'] as string[] | undefined) ?? []);
+
+    const shopRows = [
+      !disabled.has('browse') && { id: 'browse_products', title: 'Browse Products', description: 'Explore our catalogue' },
+      !disabled.has('browse') && { id: 'search_product', title: 'Search Product', description: 'Find something specific' },
+      { id: 'view_cart', title: 'View Cart', description: 'See items in your cart' },
+    ].filter(Boolean) as { id: string; title: string; description: string }[];
+
+    const orderRows = [
+      !disabled.has('order-status') && { id: 'track_order', title: 'Track Order', description: 'Check your order status' },
+      !disabled.has('order-status') && { id: 'order_history', title: 'Order History', description: 'View past orders' },
+    ].filter(Boolean) as { id: string; title: string; description: string }[];
+
+    const sections = [
+      shopRows.length > 0 && { title: 'Shop', rows: shopRows },
+      orderRows.length > 0 && { title: 'Orders', rows: orderRows },
+      {
+        title: 'Help',
+        rows: [
+          { id: 'talk_to_human', title: 'Talk to Agent', description: 'Chat with a human' },
+          { id: 'faq', title: 'FAQs', description: 'Common questions answered' },
+        ],
+      },
+    ].filter(Boolean) as { title: string; rows: { id: string; title: string; description?: string }[] }[];
+
     return [
       {
         type: 'send_list',
@@ -71,30 +96,7 @@ export const mainMenuFlow: Flow = {
         body: 'What would you like to do today?',
         footer: 'Tap an option below',
         button: 'View Menu',
-        sections: [
-          {
-            title: 'Shop',
-            rows: [
-              { id: 'browse_products', title: 'Browse Products', description: 'Explore our catalogue' },
-              { id: 'search_product', title: 'Search Product', description: 'Find something specific' },
-              { id: 'view_cart', title: 'View Cart', description: 'See items in your cart' },
-            ],
-          },
-          {
-            title: 'Orders',
-            rows: [
-              { id: 'track_order', title: 'Track Order', description: 'Check your order status' },
-              { id: 'order_history', title: 'Order History', description: 'View past orders' },
-            ],
-          },
-          {
-            title: 'Help',
-            rows: [
-              { id: 'talk_to_human', title: 'Talk to Agent', description: 'Chat with a human' },
-              { id: 'faq', title: 'FAQs', description: 'Common questions answered' },
-            ],
-          },
-        ],
+        sections,
       },
       {
         type: 'update_context',

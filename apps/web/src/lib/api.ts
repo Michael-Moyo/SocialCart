@@ -517,6 +517,37 @@ export function useUpdatePaymentSettings() {
   });
 }
 
+// ─── Bot Flows ────────────────────────────────────────────────────────────────
+
+export interface BotFlow {
+  id: string;
+  name: string;
+  description: string;
+  category: string;
+  canDisable: boolean;
+  enabled: boolean;
+}
+
+export function useBotFlows() {
+  return useQuery({
+    queryKey: ['bot-flows'],
+    queryFn: async () => {
+      const res = await api.get<{ success: boolean; data: BotFlow[] }>('/api/v1/settings/flows');
+      return res.data.data;
+    },
+  });
+}
+
+export function useToggleBotFlow() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ flowId, enabled }: { flowId: string; enabled: boolean }) => {
+      await api.patch(`/api/v1/settings/flows/${flowId}`, { enabled });
+    },
+    onSuccess: () => void qc.invalidateQueries({ queryKey: ['bot-flows'] }),
+  });
+}
+
 export function useConversations(params: { page?: number; limit?: number; status?: string } = {}) {
   return useQuery({
     queryKey: ['conversations', params],

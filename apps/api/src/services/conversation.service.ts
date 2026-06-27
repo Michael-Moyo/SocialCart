@@ -71,6 +71,13 @@ export const conversationService = {
     message: string,
     waMessageId?: string
   ): Promise<{ id: string; assignedMemberId: string | null } | null> {
+    const tenant = await prisma.tenant.findUnique({
+      where: { id: tenantId },
+      select: { settings: true },
+    });
+    const tenantSettings = (tenant?.settings ?? {}) as Record<string, unknown>;
+    const disabledFlows = (tenantSettings['disabledFlows'] as string[] | undefined) ?? [];
+
     let customer = await prisma.customer.findFirst({
       where: { tenantId, phone },
     });
@@ -107,6 +114,10 @@ export const conversationService = {
       conversationId: conversation.id,
       customerId: customer.id,
       customerName: customer.name ?? undefined,
+      data: {
+        ...(storedContext?.data ?? {}),
+        disabledFlows,
+      },
     };
 
     const { actions, newCtx } = await engine.process(message, ctx);

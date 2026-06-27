@@ -17,8 +17,17 @@ import {
   BarChart2,
   CreditCard,
   Rocket,
+  Bot,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { useSettings } from '@/lib/api';
+
+const PLAN_LABEL: Record<string, string> = {
+  FREE: 'Free',
+  STARTER: 'Starter',
+  PRO: 'Pro',
+  ENTERPRISE: 'Enterprise',
+};
 
 const navItems = [
   { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
@@ -28,6 +37,7 @@ const navItems = [
   { href: '/dashboard/customers', label: 'Customers', icon: Users },
   { href: '/dashboard/conversations', label: 'Conversations', icon: MessageSquare },
   { href: '/dashboard/campaigns', label: 'Campaigns', icon: Megaphone },
+  { href: '/dashboard/flows', label: 'Bot Flows', icon: Bot },
   { href: '/dashboard/loyalty', label: 'Loyalty', icon: Gift },
   { href: '/dashboard/analytics', label: 'Analytics', icon: BarChart2 },
   { href: '/dashboard/payments', label: 'Payments', icon: CreditCard },
@@ -38,6 +48,7 @@ const navItems = [
 
 export function Sidebar() {
   const pathname = usePathname();
+  const { data: tenant } = useSettings();
 
   return (
     <aside className="fixed inset-y-0 left-0 z-30 w-64 bg-gray-900 flex flex-col">
@@ -75,15 +86,15 @@ export function Sidebar() {
 
       {/* Footer */}
       <div className="px-3 py-4 border-t border-gray-800">
-        <div className="flex items-center gap-3 px-3 py-2">
-          <div className="w-8 h-8 rounded-full bg-gray-700 flex items-center justify-center text-gray-300 text-sm font-medium">
-            T
+        <Link href="/dashboard/settings" className="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-gray-800 transition-colors">
+          <div className="w-8 h-8 rounded-full bg-[#25D366] flex items-center justify-center text-white text-sm font-bold shrink-0">
+            {(tenant?.name ?? 'S')[0]?.toUpperCase()}
           </div>
           <div className="flex-1 min-w-0">
-            <p className="text-sm font-medium text-white truncate">My Store</p>
-            <p className="text-xs text-gray-400">Free plan</p>
+            <p className="text-sm font-medium text-white truncate">{tenant?.name ?? 'My Store'}</p>
+            <p className="text-xs text-gray-400">{PLAN_LABEL[tenant?.plan ?? ''] ?? tenant?.plan ?? 'Free'} plan</p>
           </div>
-        </div>
+        </Link>
       </div>
     </aside>
   );

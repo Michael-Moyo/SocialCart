@@ -5,9 +5,32 @@ import prisma from '../lib/prisma';
 import { buildPaginatedResponse } from '@socialcart/shared';
 import { integrationManager } from '@socialcart/integrations';
 import { notificationService } from '../services/notification.service';
+import { getWhatsAppClient } from '../services/conversation.service';
 import { pushToTenant } from './sse';
 
 const router = Router();
+
+function buildOrderStatusMessage(status: string, orderRef: string, trackingNumber?: string): string | null {
+  const ref = `#${orderRef}`;
+  switch (status) {
+    case 'confirmed':
+      return `✅ *Order Confirmed!*\nYour order ${ref} has been confirmed and is being prepared.\n\nThank you for your order! 🎉`;
+    case 'processing':
+      return `⚙️ *Order Processing*\nWe're now processing your order ${ref}.\n\nWe'll notify you when it ships!`;
+    case 'shipped':
+      return trackingNumber
+        ? `🚚 *Order Shipped!*\nYour order ${ref} is on its way!\n\n*Tracking:* ${trackingNumber}\n\nExpect delivery in 2–5 business days.`
+        : `🚚 *Order Shipped!*\nYour order ${ref} is on its way!\n\nExpect delivery in 2–5 business days.`;
+    case 'delivered':
+      return `🎁 *Order Delivered!*\nYour order ${ref} has been delivered.\n\nWe hope you love it! Reply to leave feedback anytime.`;
+    case 'cancelled':
+      return `❌ *Order Cancelled*\nYour order ${ref} has been cancelled.\n\nIf you have any questions, reply to this message and we'll help you out.`;
+    case 'refunded':
+      return `💸 *Refund Processed*\nA refund for order ${ref} has been processed.\n\nPlease allow 3–7 business days for the funds to appear.`;
+    default:
+      return null;
+  }
+}
 
 const listQuerySchema = z.object({
   page: z.coerce.number().int().min(1).default(1),
@@ -189,6 +212,18 @@ router.patch('/:id', validate(updateOrderSchema), async (req, res, next) => {
       },
       include: { customer: true },
     });
+
+    // Notify customer on WhatsApp when order status changes meaningfully
+    const statusChanged = data.status && data.status !== order.status;
+    if (statusChanged && updated.customer?.phone) {
+      const tracking = (data.trackingNumber ?? (order.shippingAddress as Record<string, unknown> | null)?.['trackingNumber'] as string | undefined);
+      const customerMessage = buildOrderStatusMessage(data.status!, order.externalId ?? id, tracking);
+      if (customerMessage) {
+        void getWhatsAppClient(tenantId)
+          .then((client) => client.sendTextMessage(updated.customer!.phone, customerMessage))
+          .catch(() => undefined); // best-effort
+      }
+    }
 
     res.json({ success: true, data: updated });
   } catch (err) {

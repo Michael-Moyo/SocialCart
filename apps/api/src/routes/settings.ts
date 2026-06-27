@@ -236,6 +236,82 @@ router.get('/onboarding', async (req: Request, res: Response) => {
   res.json({ success: true, data: { steps, completed, total, pct: Math.round((completed / total) * 100) } });
 });
 
+// GET /api/v1/settings/flows — list available bot flows and their enabled state
+router.get('/flows', async (req: Request, res: Response) => {
+  const id = tenantId(req);
+  const tenant = await prisma.tenant.findUnique({ where: { id }, select: { settings: true } });
+  const s = (tenant?.settings ?? {}) as Record<string, unknown>;
+  const disabledFlows = (s['disabledFlows'] as string[] | undefined) ?? [];
+
+  const flows = [
+    {
+      id: 'main-menu',
+      name: 'Main Menu',
+      description: 'Entry point shown to customers who say "Hi", "Hello", or trigger the menu.',
+      category: 'core',
+      canDisable: false,
+    },
+    {
+      id: 'browse',
+      name: 'Product Browse',
+      description: 'Lets customers browse your product catalog by category and view item details.',
+      category: 'commerce',
+      canDisable: true,
+    },
+    {
+      id: 'cart',
+      name: 'Cart & Checkout',
+      description: 'Add items to cart, view cart summary, and proceed to checkout.',
+      category: 'commerce',
+      canDisable: false,
+    },
+    {
+      id: 'checkout',
+      name: 'Order Placement',
+      description: 'Collects shipping details and places the order through your connected platform.',
+      category: 'commerce',
+      canDisable: false,
+    },
+    {
+      id: 'order-status',
+      name: 'Order Status',
+      description: 'Lets customers check the status of their recent orders by phone number.',
+      category: 'support',
+      canDisable: true,
+    },
+    {
+      id: 'cart-recovery',
+      name: 'Cart Recovery',
+      description: 'Re-engages customers who added items but did not complete checkout.',
+      category: 'automation',
+      canDisable: true,
+    },
+  ];
+
+  const result = flows.map((f) => ({ ...f, enabled: !disabledFlows.includes(f.id) }));
+  res.json({ success: true, data: result });
+});
+
+// PATCH /api/v1/settings/flows/:flowId — toggle a flow on/off
+router.patch('/flows/:flowId', async (req: Request, res: Response) => {
+  const id = tenantId(req);
+  const { flowId } = req.params as { flowId: string };
+  const { enabled } = req.body as { enabled: boolean };
+
+  const tenant = await prisma.tenant.findUnique({ where: { id }, select: { settings: true } });
+  const s = (tenant?.settings ?? {}) as Record<string, unknown>;
+  let disabledFlows = (s['disabledFlows'] as string[] | undefined) ?? [];
+
+  if (enabled) {
+    disabledFlows = disabledFlows.filter((f) => f !== flowId);
+  } else {
+    if (!disabledFlows.includes(flowId)) disabledFlows.push(flowId);
+  }
+
+  await prisma.tenant.update({ where: { id }, data: { settings: { ...s, disabledFlows } } });
+  res.json({ success: true, data: { flowId, enabled } });
+});
+
 // PATCH /api/v1/settings/onboarding/complete — mark onboarding dismissed
 router.patch('/onboarding/complete', async (req: Request, res: Response) => {
   const id = tenantId(req);
