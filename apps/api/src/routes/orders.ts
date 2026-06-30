@@ -5,6 +5,7 @@ import prisma from '../lib/prisma';
 import { buildPaginatedResponse } from '@socialcart/shared';
 import { integrationManager } from '@socialcart/integrations';
 import { notificationService } from '../services/notification.service';
+import { cartRecoveryService } from '../services/cart-recovery.service';
 import { getWhatsAppClient } from '../services/conversation.service';
 import { pushToTenant } from './sse';
 
@@ -169,6 +170,7 @@ router.post('/', validate(createOrderSchema), async (req, res, next) => {
       order.externalId ?? order.id,
       `${order.currency} ${Number(order.total).toFixed(2)}`
     );
+    void cartRecoveryService.markRecovered(tenantId, customer.id);
     pushToTenant(tenantId, 'order:created', { orderId: order.id, total: order.total, currency: order.currency });
 
     res.status(201).json({ success: true, data: { order, externalOrder } });

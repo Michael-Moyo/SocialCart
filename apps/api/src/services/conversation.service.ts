@@ -12,6 +12,7 @@ import {
 import { WhatsAppClient } from '@socialcart/whatsapp';
 import prisma from '../lib/prisma';
 import { notificationService } from './notification.service';
+import { cartRecoveryService } from './cart-recovery.service';
 import { pushToTenant } from '../routes/sse';
 import type { NotificationType } from '@prisma/client';
 
@@ -100,6 +101,9 @@ async function handleCreateOrderAction(
 
     // SSE push so dashboard shows new order
     pushToTenant(tenantId, 'order:created', { orderId: order.id, total, currency: 'NGN' });
+
+    // Mark any previously-abandoned carts for this customer as recovered
+    void cartRecoveryService.markRecovered(tenantId, customerId);
 
     // Decrement inventory for each item and check for low stock
     for (const item of action.items) {

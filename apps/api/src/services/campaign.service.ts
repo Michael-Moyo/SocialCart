@@ -9,7 +9,9 @@ interface TargetSegment {
   tags?: string[];     // customer tag filter (any match)
 }
 
-async function resolveAudience(tenantId: string, segment: TargetSegment): Promise<string[]> {
+interface Recipient { phone: string; name: string }
+
+async function resolveAudience(tenantId: string, segment: TargetSegment): Promise<Recipient[]> {
   const where: Record<string, unknown> = { tenantId };
 
   if (segment.tier) {
@@ -33,7 +35,11 @@ async function resolveAudience(tenantId: string, segment: TargetSegment): Promis
       if (segment.maxOrders !== undefined && c._count.orders > segment.maxOrders) return false;
       return true;
     })
-    .map((c) => c.phone);
+    .map((c) => ({ phone: c.phone, name: c.name ?? c.phone }));
+}
+
+function personalise(template: string, recipient: Recipient): string {
+  return template.replace(/\{\{name\}\}/gi, recipient.name.split(' ')[0] ?? recipient.name);
 }
 
 export async function dispatchCampaign(campaignId: string): Promise<void> {
@@ -47,16 +53,17 @@ export async function dispatchCampaign(campaignId: string): Promise<void> {
   let sent = 0;
   const errors: string[] = [];
 
-  for (const phone of phones) {
+  for (const recipient of phones) {
     try {
+      const message = personalise(campaign.message, recipient);
       if (campaign.mediaUrl) {
-        await client.sendMediaMessage(phone, 'image', campaign.mediaUrl, campaign.message);
+        await client.sendMediaMessage(recipient.phone, 'image', campaign.mediaUrl, message);
       } else {
-        await client.sendTextMessage(phone, campaign.message);
+        await client.sendTextMessage(recipient.phone, message);
       }
       sent++;
     } catch (err) {
-      errors.push(`${phone}: ${String(err)}`);
+      errors.push(`${recipient.phone}: ${String(err)}`);
     }
     // Throttle to avoid WhatsApp rate limits
     await new Promise((r) => setTimeout(r, 200));
