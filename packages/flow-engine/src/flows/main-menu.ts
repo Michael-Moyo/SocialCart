@@ -12,7 +12,6 @@ export const mainMenuFlow: Flow = {
           view_cart: { flow: 'cart', step: 'handle_action' },
           track_order: { flow: 'order-status', step: 'lookup' },
           order_history: { flow: 'order-status', step: 'lookup' },
-          talk_to_human: { flow: 'main-menu', step: 'handle_selection' },
           faq: { flow: 'main-menu', step: 'handle_selection' },
         };
 
@@ -33,11 +32,12 @@ export const mainMenuFlow: Flow = {
           return [{ type: 'transition', flow: 'order-status', step: 'lookup' }];
         }
 
-        if (lower === 'talk_to_human' || lower === 'human' || lower === 'agent') {
+        if (lower === 'talk_to_human' || lower === 'human' || lower === 'agent' || input === 'talk_to_human') {
           return [
+            { type: 'request_human_agent' },
             {
               type: 'send_text',
-              text: 'Connecting you to a support agent. Please wait a moment... 🙋',
+              text: "We've notified our support team and someone will be with you shortly. You can keep chatting here and they'll see your messages. 🙋",
             },
             { type: 'end_flow' },
           ];

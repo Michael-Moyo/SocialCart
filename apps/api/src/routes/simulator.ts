@@ -165,6 +165,42 @@ router.post('/message', validate(messageSchema), async (req: Request, res: Respo
       },
     });
 
+    // Handle side-effect actions that don't produce messages
+    for (const action of actions) {
+      if (action.type === 'create_order') {
+        // Fire-and-forget; errors are logged inside
+        const { cartRecoveryService } = await import('../services/cart-recovery.service');
+        const { notificationService } = await import('../services/notification.service');
+        const { pushToTenant } = await import('../routes/sse');
+        void (async () => {
+          try {
+            const total = action.items.reduce((s, i) => s + i.price * i.quantity, 0);
+            const order = await prisma.order.create({
+              data: {
+                tenantId,
+                customerId: customer.id,
+                source: null,
+                status: 'pending',
+                paymentStatus: 'unpaid',
+                fulfillmentStatus: 'unfulfilled',
+                subtotal: total,
+                tax: 0, shipping: 0, discount: 0, total,
+                currency: 'NGN',
+                items: action.items,
+                shippingAddress: action.shippingAddress ?? null,
+                notes: action.notes ?? null,
+              },
+            });
+            pushToTenant(tenantId, 'order:created', { orderId: order.id, total, currency: 'NGN' });
+            void cartRecoveryService.markRecovered(tenantId, customer.id);
+            void notificationService.notifyNewOrder(tenantId, order.id.slice(0, 8).toUpperCase(), `NGN ${total.toFixed(2)}`);
+          } catch (err) {
+            console.error('[simulator create_order]', err);
+          }
+        })();
+      }
+    }
+
     const replies = actionsToReplies(actions);
 
     // Save each bot reply message

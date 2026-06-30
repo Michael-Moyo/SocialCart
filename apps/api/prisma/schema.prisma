@@ -147,6 +147,7 @@ enum NotificationType {
   LOYALTY_TIER_UP
   TEAM_INVITE
   LOW_STOCK
+  AGENT_REQUEST
   SYSTEM
 }
 

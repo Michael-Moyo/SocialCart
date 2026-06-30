@@ -322,6 +322,27 @@ export const conversationService = {
         );
       } else if (action.type === 'create_order') {
         void handleCreateOrderAction(tenantId, conversation.id, customer.id, action);
+      } else if (action.type === 'request_human_agent') {
+        // Flag conversation as needing human attention
+        void (async () => {
+          try {
+            await prisma.conversation.update({
+              where: { id: conversation.id },
+              data: { status: 'OPEN' }, // keep open, team can see unread state
+            });
+            void notificationService.dispatch({
+              tenantId,
+              type: 'AGENT_REQUEST' as import('@prisma/client').NotificationType,
+              title: 'Agent requested',
+              body: `${customer.name ?? phone} is asking for a human agent`,
+              data: { conversationId: conversation.id, phone, customerId: customer.id },
+              channels: ['IN_APP', 'PUSH'],
+            });
+            pushToTenant(tenantId, 'conversation:agent_request', { conversationId: conversation.id, phone, customerName: customer.name });
+          } catch (e) {
+            console.error('[agent request]', e);
+          }
+        })();
       }
     }
 

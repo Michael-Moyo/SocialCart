@@ -23,6 +23,19 @@ function buildCartSummary(cart: CartItem[]): string {
   return lines.join('\n');
 }
 
+function cartButtons(cart: CartItem[]): Array<{ id: string; title: string }> {
+  return cart.length > 0
+    ? [
+        { id: 'checkout', title: 'Checkout' },
+        { id: 'remove_item', title: 'Remove Item' },
+        { id: 'clear_cart', title: 'Clear Cart' },
+      ]
+    : [
+        { id: 'browse_all', title: 'Browse Products' },
+        { id: 'main_menu', title: 'Main Menu' },
+      ];
+}
+
 export const cartFlow: Flow = {
   id: 'cart',
   steps: new Map([
@@ -34,6 +47,31 @@ export const cartFlow: Flow = {
         }
         if (input === 'continue_shopping' || input === 'continue' || input === 'browse_all') {
           return [{ type: 'transition', flow: 'browse', step: 'search' }];
+        }
+        if (input === 'remove_item') {
+          if (ctx.cart.length === 0) {
+            return [
+              { type: 'send_text', text: 'Your cart is already empty.' },
+              { type: 'transition', flow: 'main-menu', step: 'handle_selection' },
+            ];
+          }
+          const currency = detectCurrency(ctx.cart);
+          const rows = ctx.cart.map((item, idx) => ({
+            id: `remove:${idx}`,
+            title: item.name,
+            description: `${item.quantity} × ${formatPrice(item.price, currency)}`,
+          }));
+          return [
+            {
+              type: 'send_list',
+              header: 'Remove Item',
+              body: 'Which item would you like to remove from your cart?',
+              footer: 'Tap an item to remove it',
+              button: 'Select Item',
+              sections: [{ title: 'Cart Items', rows }],
+            },
+            { type: 'update_context', updates: { currentStep: 'confirm_remove' } },
+          ];
         }
         if (input === 'clear_cart' || input === 'clear') {
           return [
@@ -54,47 +92,51 @@ export const cartFlow: Flow = {
         }
 
         const summary = buildCartSummary(ctx.cart);
-        const buttons: Array<{ id: string; title: string }> = ctx.cart.length > 0
-          ? [
-              { id: 'checkout', title: 'Checkout' },
-              { id: 'continue_shopping', title: 'Keep Shopping' },
-              { id: 'clear_cart', title: 'Clear Cart' },
-            ]
-          : [
-              { id: 'browse_all', title: 'Browse Products' },
-              { id: 'main_menu', title: 'Main Menu' },
-            ];
 
         return [
           {
             type: 'send_buttons',
             body: `🛒 *Your Cart*\n\n${summary}`,
-            buttons,
+            buttons: cartButtons(ctx.cart),
           },
           { type: 'update_context', updates: { currentStep: 'handle_action' } },
         ];
+      },
+    ],
+    [
+      'confirm_remove',
+      async (input: string, ctx: FlowContext): Promise<FlowAction[]> => {
+        if (input.startsWith('remove:')) {
+          const idx = parseInt(input.replace('remove:', ''), 10);
+          if (!isNaN(idx) && idx >= 0 && idx < ctx.cart.length) {
+            const removed = ctx.cart[idx]!;
+            const newCart = ctx.cart.filter((_, i) => i !== idx);
+            const summary = buildCartSummary(newCart);
+            return [
+              { type: 'update_context', updates: { cart: newCart, currentStep: 'handle_action' } },
+              {
+                type: 'send_buttons',
+                body: `✅ *${removed.name}* removed.\n\n🛒 *Your Cart*\n\n${summary}`,
+                buttons: cartButtons(newCart),
+              },
+            ];
+          }
+        }
+        // Unrecognised input — show cart again
+        return [{ type: 'update_context', updates: { currentStep: 'handle_action' } },
+          { type: 'transition', flow: 'cart', step: 'handle_action' }];
       },
     ],
   ]),
 
   onEntry: async (ctx: FlowContext): Promise<FlowAction[]> => {
     const summary = buildCartSummary(ctx.cart);
-    const buttons: Array<{ id: string; title: string }> = ctx.cart.length > 0
-      ? [
-          { id: 'checkout', title: 'Checkout' },
-          { id: 'continue_shopping', title: 'Keep Shopping' },
-          { id: 'clear_cart', title: 'Clear Cart' },
-        ]
-      : [
-          { id: 'browse_all', title: 'Browse Products' },
-          { id: 'main_menu', title: 'Main Menu' },
-        ];
 
     return [
       {
         type: 'send_buttons',
         body: `🛒 *Your Cart*\n\n${summary}`,
-        buttons,
+        buttons: cartButtons(ctx.cart),
       },
       { type: 'update_context', updates: { currentFlow: 'cart', currentStep: 'handle_action' } },
     ];

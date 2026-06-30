@@ -22,7 +22,7 @@ function buildCartSummary(cart: CartItem[]): string {
   return lines.join('\n');
 }
 
-function parseAddress(text: string): FlowContext['pendingAddress'] | null {
+function parseAddress(text: string, customerName?: string): FlowContext['pendingAddress'] | null {
   const parts = text.split(',').map((p) => p.trim());
   if (parts.length < 3) return null;
 
@@ -33,9 +33,13 @@ function parseAddress(text: string): FlowContext['pendingAddress'] | null {
 
   if (!address1 || !city || !state) return null;
 
+  const nameParts = (customerName ?? '').trim().split(/\s+/);
+  const firstName = nameParts[0] ?? '';
+  const lastName = nameParts.slice(1).join(' ');
+
   return {
-    firstName: '',
-    lastName: '',
+    firstName,
+    lastName,
     address1,
     city,
     state,
@@ -69,7 +73,7 @@ export const checkoutFlow: Flow = {
           ];
         }
 
-        const parsed = parseAddress(input);
+        const parsed = parseAddress(input, ctx.customerName);
         if (!parsed) {
           return [
             {

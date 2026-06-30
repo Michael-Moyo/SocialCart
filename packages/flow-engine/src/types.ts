@@ -61,7 +61,8 @@ export type FlowAction =
       customerPhone: string;
       customerName?: string;
       notes?: string;
-    };
+    }
+  | { type: 'request_human_agent' };
 
 export type StepHandler = (input: string, ctx: FlowContext) => Promise<FlowAction[]>;
 
