@@ -307,7 +307,54 @@ export const browseFlow: Flow = {
     ],
   ]),
 
-  onEntry: async (_ctx: FlowContext): Promise<FlowAction[]> => {
+  onEntry: async (ctx: FlowContext): Promise<FlowAction[]> => {
+    const fetchProducts = ctx.data['fetchProducts'] as FetchProducts | undefined;
+
+    // Try to build a category-based browse menu
+    if (fetchProducts) {
+      try {
+        const all = await fetchProducts('browse_all', ctx.tenantId);
+        const categorySet = new Set<string>();
+        for (const p of all) {
+          if (p.categories) p.categories.forEach((c) => categorySet.add(c));
+        }
+        const categories = [...categorySet].slice(0, 8);
+
+        if (categories.length > 0) {
+          const categoryRows = categories.map((c) => ({
+            id: c,
+            title: c,
+            description: `Browse ${c} products`,
+          }));
+
+          const sections = [
+            {
+              title: 'Browse by Category',
+              rows: categoryRows,
+            },
+            {
+              title: 'Or',
+              rows: [{ id: 'browse_all', title: 'View All Products', description: `All ${all.length} product${all.length !== 1 ? 's' : ''}` }],
+            },
+          ];
+
+          return [
+            {
+              type: 'send_list',
+              header: '🛍️ Shop',
+              body: 'What are you looking for today?',
+              footer: 'Tap a category to browse',
+              button: 'Browse',
+              sections,
+            },
+            { type: 'update_context', updates: { currentFlow: 'browse', currentStep: 'search' } },
+          ];
+        }
+      } catch {
+        // Fall through to plain text prompt
+      }
+    }
+
     return [
       {
         type: 'send_text',

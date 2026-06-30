@@ -1,22 +1,8 @@
 import { Router, Request, Response } from 'express';
-import axios from 'axios';
 import prisma from '../lib/prisma';
 import { pushToTenant } from './sse';
 import { notificationService } from '../services/notification.service';
-
-const GRAPH_URL = 'https://graph.facebook.com/v19.0';
-
-async function sendWhatsAppText(to: string, text: string) {
-  const token = process.env['WHATSAPP_ACCESS_TOKEN'];
-  const phoneId = process.env['WHATSAPP_PHONE_NUMBER_ID'];
-  if (!token || !phoneId) return null;
-  const res = await axios.post(
-    `${GRAPH_URL}/${phoneId}/messages`,
-    { messaging_product: 'whatsapp', to, type: 'text', text: { body: text, preview_url: false } },
-    { headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' } }
-  );
-  return (res.data as { messages?: Array<{ id: string }> })?.messages?.[0]?.id ?? null;
-}
+import { getWhatsAppClient } from '../services/conversation.service';
 
 const router = Router();
 
@@ -133,10 +119,12 @@ router.post('/:id/reply', async (req: Request, res: Response) => {
     return;
   }
 
-  // Send via WhatsApp Cloud API
+  // Send via per-tenant WhatsApp client
   let waMessageId: string | null = null;
   try {
-    waMessageId = await sendWhatsAppText(conversation.waNumber, text.trim());
+    const client = await getWhatsAppClient(tenantId);
+    const result = await client.sendTextMessage(conversation.waNumber, text.trim());
+    waMessageId = result.messages[0]?.id ?? null;
   } catch {
     // Continue — still save the message even if WA delivery fails in dev
   }

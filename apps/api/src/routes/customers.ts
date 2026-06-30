@@ -45,10 +45,22 @@ router.get('/', validate(listQuerySchema, 'query'), async (req, res, next) => {
         skip: (page - 1) * limit,
         take: limit,
         orderBy: { createdAt: 'desc' },
+        include: {
+          _count: { select: { orders: true } },
+          orders: {
+            select: { total: true },
+          },
+        },
       }),
     ]);
 
-    res.json({ success: true, ...buildPaginatedResponse(customers, total, page, limit) });
+    const enriched = customers.map(({ _count, orders, ...c }) => ({
+      ...c,
+      totalOrders: _count.orders,
+      totalSpent: orders.reduce((sum, o) => sum + Number(o.total), 0).toFixed(2),
+    }));
+
+    res.json({ success: true, ...buildPaginatedResponse(enriched, total, page, limit) });
   } catch (err) {
     next(err);
   }
