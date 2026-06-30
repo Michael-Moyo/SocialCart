@@ -119,6 +119,7 @@ const updateProductSchema = z.object({
   inventory: z.number().int().min(0).optional(),
   status: z.enum(['active', 'inactive', 'draft']).optional(),
   categories: z.array(z.string()).optional(),
+  images: z.array(z.object({ url: z.string().url(), alt: z.string().optional() })).optional(),
 });
 
 router.patch('/:id', validate(updateProductSchema), async (req, res, next) => {
@@ -141,6 +142,7 @@ router.patch('/:id', validate(updateProductSchema), async (req, res, next) => {
         ...(body.inventory !== undefined && { inventory: body.inventory }),
         ...(body.status !== undefined && { status: body.status }),
         ...(body.categories !== undefined && { categories: body.categories }),
+        ...(body.images !== undefined && { images: body.images }),
       },
     });
 

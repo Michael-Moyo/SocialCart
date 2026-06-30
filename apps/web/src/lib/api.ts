@@ -138,6 +138,7 @@ export function useCreateProduct() {
       name: string; description?: string; sku?: string; price: number;
       compareAtPrice?: number; currency?: string; inventory?: number;
       categories?: string[]; status?: string;
+      images?: { url: string; alt?: string }[];
     }) => {
       const res = await api.post('/api/v1/products', data);
       return res.data;
@@ -149,7 +150,7 @@ export function useCreateProduct() {
 export function useUpdateProduct(id: string) {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async (data: { name?: string; description?: string; price?: number; inventory?: number; status?: string; categories?: string[] }) => {
+    mutationFn: async (data: { name?: string; description?: string; price?: number; inventory?: number; status?: string; categories?: string[]; images?: { url: string; alt?: string }[] }) => {
       const res = await api.patch(`/api/v1/products/${id}`, data);
       return res.data;
     },

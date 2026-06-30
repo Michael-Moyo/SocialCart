@@ -144,25 +144,25 @@ export default function DashboardPage() {
             title="Orders (7d)"
             value={totalOrders.toLocaleString()}
             icon={<ShoppingCart className="h-5 w-5" />}
-            change={analytics?.orders?.change}
+            change={analytics?.orders?.change !== undefined ? `${analytics.orders.change > 0 ? '+' : ''}${analytics.orders.change}%` : undefined}
           />
           <StatCard
             title="Revenue (7d)"
             value={formatCurrency(totalRevenue)}
             icon={<TrendingUp className="h-5 w-5" />}
-            change={analytics?.revenue?.change}
+            change={analytics?.revenue?.change !== undefined ? `${analytics.revenue.change > 0 ? '+' : ''}${analytics.revenue.change}%` : undefined}
           />
           <StatCard
             title="New Customers"
             value={totalCustomers.toLocaleString()}
             icon={<Users className="h-5 w-5" />}
-            change={analytics?.newCustomers?.change}
+            change={analytics?.newCustomers?.change !== undefined ? `${analytics.newCustomers.change > 0 ? '+' : ''}${analytics.newCustomers.change}%` : undefined}
           />
           <StatCard
             title="Conversations (7d)"
             value={(analytics?.conversations?.value ?? 0).toLocaleString()}
             icon={<MessageSquare className="h-5 w-5" />}
-            change={analytics?.conversations?.change}
+            change={analytics?.conversations?.change !== undefined ? `${analytics.conversations.change > 0 ? '+' : ''}${analytics.conversations.change}%` : undefined}
           />
         </div>
 

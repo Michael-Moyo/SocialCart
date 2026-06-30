@@ -341,6 +341,16 @@ export default function ConversationsPage() {
       }
       setSseConnected(true);
     }, [queryClient]),
+    'conversation:agent_request': useCallback((data: unknown) => {
+      const d = data as { conversationId: string };
+      void queryClient.invalidateQueries({ queryKey: ['conversations'] });
+      if (d.conversationId) {
+        void queryClient.invalidateQueries({ queryKey: ['conversation', d.conversationId] });
+        // Auto-select the conversation so the agent sees it immediately
+        setSelectedId(d.conversationId);
+      }
+      setSseConnected(true);
+    }, [queryClient]),
   });
 
   const { data, isLoading, refetch, isFetching } = useConversations({

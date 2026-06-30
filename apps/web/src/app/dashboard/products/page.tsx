@@ -29,11 +29,13 @@ interface ProductFormState {
   inventory: string;
   categories: string;
   status: 'active' | 'inactive' | 'draft';
+  imageUrl: string;
 }
 
 const EMPTY_FORM: ProductFormState = {
   name: '', description: '', sku: '', price: '', compareAtPrice: '',
   currency: 'NGN', inventory: '0', categories: '', status: 'active',
+  imageUrl: '',
 };
 
 function productToForm(p: Product): ProductFormState {
@@ -47,6 +49,7 @@ function productToForm(p: Product): ProductFormState {
     inventory: p.inventory.toString(),
     categories: p.categories.join(', '),
     status: p.status as 'active' | 'inactive' | 'draft',
+    imageUrl: p.images?.[0]?.url ?? '',
   };
 }
 
@@ -83,6 +86,7 @@ function ProductModal({
       inventory: parseInt(form.inventory, 10) || 0,
       categories: form.categories ? form.categories.split(',').map((s) => s.trim()).filter(Boolean) : [],
       status: form.status,
+      images: form.imageUrl.trim() ? [{ url: form.imageUrl.trim(), alt: form.name.trim() }] : undefined,
     };
 
     const mutation = product ? update : create;
@@ -95,7 +99,7 @@ function ProductModal({
   const isPending = create.isPending || update.isPending;
 
   return (
-    <Modal title={product ? 'Edit Product' : 'Add Product'} onClose={onClose}>
+    <Modal title={product ? 'Edit Product' : 'Add Product'} open onOpenChange={(o) => { if (!o) onClose(); }}>
       <form onSubmit={(e) => void handleSubmit(e)} className="space-y-4">
         {error && (
           <div className="bg-red-50 border border-red-200 rounded-lg px-3 py-2 text-sm text-red-700">
@@ -191,6 +195,26 @@ function ProductModal({
               className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#25D366]/30 focus:border-[#25D366]"
             />
           </div>
+
+          <div className="col-span-2">
+            <label className="block text-sm font-medium text-gray-700 mb-1">Image URL</label>
+            <div className="flex gap-2 items-start">
+              <input
+                type="url" value={form.imageUrl}
+                onChange={(e) => set('imageUrl', e.target.value)}
+                placeholder="https://example.com/image.jpg"
+                className="flex-1 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#25D366]/30 focus:border-[#25D366]"
+              />
+              {form.imageUrl.trim() && (
+                <img
+                  src={form.imageUrl}
+                  alt="preview"
+                  className="w-12 h-12 rounded-lg object-cover border border-gray-200 flex-shrink-0"
+                  onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                />
+              )}
+            </div>
+          </div>
         </div>
 
         <div className="flex gap-3 pt-2">
@@ -209,7 +233,7 @@ function ProductModal({
 function DeleteConfirm({ product, onClose }: { product: Product; onClose: () => void }) {
   const del = useDeleteProduct();
   return (
-    <Modal title="Delete Product" onClose={onClose}>
+    <Modal title="Delete Product" open onOpenChange={(o) => { if (!o) onClose(); }}>
       <div className="space-y-4">
         <p className="text-sm text-gray-600">
           Are you sure you want to delete <strong>{product.name}</strong>? This cannot be undone.
@@ -418,7 +442,7 @@ export default function ProductsPage() {
       </div>
 
       {/* Modals */}
-      {(editProduct === 'new' || (editProduct && editProduct !== 'new')) && (
+      {editProduct !== null && (
         <ProductModal
           product={editProduct === 'new' ? null : editProduct}
           onClose={() => setEditProduct(null)}
