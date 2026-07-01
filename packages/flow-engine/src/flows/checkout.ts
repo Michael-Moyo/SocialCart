@@ -163,7 +163,7 @@ export const checkoutFlow: Flow = {
 
           actions.push({
             type: 'send_buttons',
-            body: `*Order Summary*\n\n${summary}\n\n*Payment:* ${paymentLabel}*Delivery:* ${deliveryLine}\n\n*Grand Total: ${formatPrice(total, currency)}*${bankInfo}`,
+            body: `*Order Summary*\n\n${summary}\n\n*Payment:* ${paymentLabel}\n*Delivery:* ${deliveryLine}\n\n*Grand Total: ${formatPrice(total, currency)}*${bankInfo}`,
             buttons: [
               { id: 'place_order', title: 'Place Order' },
               { id: 'edit_cart', title: 'Edit Cart' },

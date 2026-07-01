@@ -1,5 +1,6 @@
-import { Router, Request, Response } from 'express';
-import { authMiddleware } from '../middleware/auth';
+import { Router, Request, Response, NextFunction } from 'express';
+import jwt from 'jsonwebtoken';
+import prisma from '../lib/prisma';
 import { notificationService } from '../services/notification.service';
 
 const router = Router();
@@ -27,8 +28,37 @@ export function pushToTenant(tenantId: string, event: string, data: unknown) {
   }
 }
 
+// SSE-specific auth: EventSource can't set headers, so accept token from query param OR Authorization header
+async function sseAuth(req: Request, res: Response, next: NextFunction): Promise<void> {
+  const secret = process.env['JWT_SECRET'];
+  if (!secret) { res.status(500).end(); return; }
+
+  const token =
+    (req.query['token'] as string | undefined) ??
+    req.headers.authorization?.replace(/^Bearer\s+/i, '');
+
+  if (!token) {
+    res.status(401).json({ success: false, error: 'Missing token' });
+    return;
+  }
+
+  try {
+    const payload = jwt.verify(token, secret) as { tenantId: string };
+    const tenant = await prisma.tenant.findUnique({ where: { id: payload.tenantId } });
+    if (!tenant || !tenant.isActive) {
+      res.status(401).json({ success: false, error: 'Tenant not found or inactive' });
+      return;
+    }
+    req.tenantId = tenant.id;
+    req.tenant = tenant;
+    next();
+  } catch {
+    res.status(401).json({ success: false, error: 'Invalid or expired token' });
+  }
+}
+
 // GET /api/v1/sse — establish SSE stream
-router.get('/', authMiddleware, (req: Request, res: Response) => {
+router.get('/', sseAuth, (req: Request, res: Response) => {
   const tenantId = req.tenantId!;
 
   res.setHeader('Content-Type', 'text/event-stream');

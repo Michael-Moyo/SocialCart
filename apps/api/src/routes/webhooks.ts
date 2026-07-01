@@ -40,16 +40,6 @@ router.post('/:tenantId/:platform', async (req: Request, res: Response) => {
         'unknown';
 
       await connector.handleWebhook(topic, req.body);
-
-      // Log to DB
-      await prisma.message.create({
-        data: {
-          conversationId: 'system',
-          direction: 'INBOUND',
-          type: 'webhook',
-          content: { platform, topic, payload: req.body },
-        },
-      }).catch(() => null); // non-critical
     }
 
     res.json({ received: true });

@@ -28,8 +28,7 @@ export function PushNotificationManager() {
 
         if (!sub) {
           sub = await registration.pushManager.subscribe({
-            userAgent: navigator.userAgent,
-            applicationServerKey: urlBase64ToUint8Array(publicKey),
+            applicationServerKey: urlBase64ToUint8Array(publicKey).buffer as ArrayBuffer,
           });
         }
 

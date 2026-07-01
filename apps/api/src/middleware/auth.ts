@@ -122,19 +122,16 @@ export async function superAdminMiddleware(req: Request, res: Response, next: Ne
 // ─── Token generators ─────────────────────────────────────────────────────────
 
 export function generateToken(tenantId: string): string {
-  return jwt.sign({ tenantId }, secret(), {
-    expiresIn: process.env['JWT_EXPIRES_IN'] ?? '7d',
-  });
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  return jwt.sign({ tenantId }, secret(), { expiresIn: (process.env['JWT_EXPIRES_IN'] ?? '7d') as any });
 }
 
 export function generateMemberToken(tenantId: string, memberId: string, role: TeamRole): string {
-  return jwt.sign({ tenantId, memberId, role }, secret(), {
-    expiresIn: process.env['JWT_EXPIRES_IN'] ?? '7d',
-  });
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  return jwt.sign({ tenantId, memberId, role }, secret(), { expiresIn: (process.env['JWT_EXPIRES_IN'] ?? '7d') as any });
 }
 
 export function generateSuperAdminToken(superAdminId: string): string {
-  return jwt.sign({ superAdminId }, secret(), {
-    expiresIn: '12h',
-  });
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  return jwt.sign({ superAdminId }, secret(), { expiresIn: '12h' as any });
 }

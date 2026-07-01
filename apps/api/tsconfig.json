@@ -6,9 +6,10 @@
     "paths": {
       "@socialcart/shared": ["../../packages/shared/src"],
       "@socialcart/integrations": ["../../packages/integrations/src"],
-      "@socialcart/whatsapp": ["../../packages/whatsapp/src"]
+      "@socialcart/whatsapp": ["../../packages/whatsapp/src"],
+      "@socialcart/flow-engine": ["../../packages/flow-engine/src"]
     }
   },
-  "include": ["src/**/*"],
+  "include": ["src/**/*", "../../packages/shared/src/**/*", "../../packages/whatsapp/src/**/*", "../../packages/flow-engine/src/**/*", "../../packages/integrations/src/**/*"],
   "exclude": ["node_modules", "dist"]
 }
