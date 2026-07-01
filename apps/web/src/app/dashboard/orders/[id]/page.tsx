@@ -149,9 +149,9 @@ export default function OrderDetailPage() {
                           {item.sku && <p className="text-xs text-gray-400">SKU: {item.sku}</p>}
                         </div>
                         <div className="text-right flex-shrink-0">
-                          <p className="text-sm text-gray-600">×{item.qty}</p>
+                          <p className="text-sm text-gray-600">×{item.qty ?? item.quantity ?? 1}</p>
                           <p className="text-sm font-semibold text-gray-900">
-                            {formatCurrency(item.price * item.qty)}
+                            {formatCurrency(item.price * (item.qty ?? item.quantity ?? 1))}
                           </p>
                         </div>
                       </div>

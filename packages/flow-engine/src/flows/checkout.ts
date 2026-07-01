@@ -143,19 +143,45 @@ export const checkoutFlow: Flow = {
         const summary = buildCartSummary(ctx.cart);
         const currency = detectCurrency(ctx.cart);
         const total = ctx.cart.reduce((sum, item) => sum + item.price * item.quantity, 0);
+        const deliveryLine = ctx.pendingAddress
+          ? `${ctx.pendingAddress.address1}, ${ctx.pendingAddress.city}`
+          : 'Address on file';
 
-        return [
+        const actions: FlowAction[] = [
           { type: 'update_context', updates: { data: { ...ctx.data, paymentMethod: input } } },
-          {
+        ];
+
+        // For bank transfer: show bank details before order confirmation
+        if (input === 'bank_transfer') {
+          const bankName = (ctx.data['bankName'] as string | undefined) ?? '';
+          const accountNumber = (ctx.data['accountNumber'] as string | undefined) ?? '';
+          const accountName = (ctx.data['accountName'] as string | undefined) ?? '';
+
+          const bankInfo = bankName && accountNumber
+            ? `\n\n🏦 *Bank Details:*\nBank: ${bankName}\nAccount: ${accountNumber}\nName: ${accountName}\n\nAfter transfer, tap *Place Order* to confirm.`
+            : '\n\nPlease transfer to our bank account and tap *Place Order* to confirm.';
+
+          actions.push({
             type: 'send_buttons',
-            body: `*Order Summary*\n\n${summary}\n\n*Payment:* ${paymentLabel}\n*Delivery:* ${ctx.pendingAddress ? `${ctx.pendingAddress.address1}, ${ctx.pendingAddress.city}` : 'Address on file'}\n\n*Grand Total: ${formatPrice(total, currency)}*`,
+            body: `*Order Summary*\n\n${summary}\n\n*Payment:* ${paymentLabel}*Delivery:* ${deliveryLine}\n\n*Grand Total: ${formatPrice(total, currency)}*${bankInfo}`,
             buttons: [
               { id: 'place_order', title: 'Place Order' },
               { id: 'edit_cart', title: 'Edit Cart' },
             ],
-          },
-          { type: 'update_context', updates: { currentStep: 'place_order' } },
-        ];
+          });
+        } else {
+          actions.push({
+            type: 'send_buttons',
+            body: `*Order Summary*\n\n${summary}\n\n*Payment:* ${paymentLabel}\n*Delivery:* ${deliveryLine}\n\n*Grand Total: ${formatPrice(total, currency)}*`,
+            buttons: [
+              { id: 'place_order', title: 'Place Order' },
+              { id: 'edit_cart', title: 'Edit Cart' },
+            ],
+          });
+        }
+
+        actions.push({ type: 'update_context', updates: { currentStep: 'place_order' } });
+        return actions;
       },
     ],
     [
@@ -166,6 +192,8 @@ export const checkoutFlow: Flow = {
         }
 
         const orderId = generateOrderId();
+        const currency = detectCurrency(ctx.cart);
+        const paymentMethod = (ctx.data['paymentMethod'] as string | undefined) ?? 'pay_on_delivery';
 
         return [
           {
@@ -175,6 +203,8 @@ export const checkoutFlow: Flow = {
             customerPhone: ctx.phone,
             customerName: ctx.customerName,
             notes: `WhatsApp order — ref ${orderId}`,
+            currency,
+            paymentMethod,
           },
           { type: 'update_context', updates: { cart: [], pendingAddress: undefined, currentFlow: null, currentStep: null } },
           {

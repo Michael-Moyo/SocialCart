@@ -61,6 +61,8 @@ export type FlowAction =
       customerPhone: string;
       customerName?: string;
       notes?: string;
+      currency?: string;
+      paymentMethod?: string;
     }
   | { type: 'request_human_agent' };
 

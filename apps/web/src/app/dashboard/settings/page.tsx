@@ -25,6 +25,7 @@ import {
   useUpdateWhatsApp,
   useUpdateBotSettings,
   useUpdatePaymentSettings,
+  useUpdateBankingSettings,
   type TenantSettings,
 } from '@/lib/api';
 import { cn } from '@/lib/utils';
@@ -156,6 +157,7 @@ const TABS = [
   { id: 'whatsapp', label: 'WhatsApp', icon: MessageSquare },
   { id: 'bot', label: 'Bot Config', icon: Bot },
   { id: 'payments', label: 'Payments', icon: CreditCard },
+  { id: 'banking', label: 'Banking', icon: CreditCard },
   { id: 'security', label: 'Security', icon: Lock },
   { id: 'plan', label: 'Plan & Billing', icon: CreditCard },
 ] as const;
@@ -899,6 +901,73 @@ function PaymentsSection() {
   );
 }
 
+// ─── Banking section ──────────────────────────────────────────────────────────
+
+function BankingSection() {
+  const { data: settings } = useSettings();
+  const update = useUpdateBankingSettings();
+  const s = (settings?.settings ?? {}) as Record<string, unknown>;
+
+  const [bankName, setBankName] = useState('');
+  const [accountNumber, setAccountNumber] = useState('');
+  const [accountName, setAccountName] = useState('');
+  const [saved, setSaved] = useState(false);
+
+  useEffect(() => {
+    if (s['bankName']) setBankName(s['bankName'] as string);
+    if (s['accountNumber']) setAccountNumber(s['accountNumber'] as string);
+    if (s['accountName']) setAccountName(s['accountName'] as string);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [settings]);
+
+  function handleSave() {
+    update.mutate({ bankName, accountNumber, accountName }, {
+      onSuccess: () => { setSaved(true); setTimeout(() => setSaved(false), 2500); },
+    });
+  }
+
+  return (
+    <Section title="Bank Transfer Details" description="Shown to customers who choose bank transfer at checkout">
+      <div className="bg-blue-50 border border-blue-100 rounded-lg p-3">
+        <p className="text-xs text-blue-700">
+          These details are sent automatically via WhatsApp when a customer selects &ldquo;Bank Transfer&rdquo; at checkout.
+        </p>
+      </div>
+      <Field label="Bank Name">
+        <Input
+          value={bankName}
+          onChange={(e) => setBankName(e.target.value)}
+          placeholder="e.g. Access Bank"
+        />
+      </Field>
+      <Field label="Account Number">
+        <Input
+          value={accountNumber}
+          onChange={(e) => setAccountNumber(e.target.value)}
+          placeholder="e.g. 0123456789"
+        />
+      </Field>
+      <Field label="Account Name">
+        <Input
+          value={accountName}
+          onChange={(e) => setAccountName(e.target.value)}
+          placeholder="e.g. My Store Ltd"
+        />
+      </Field>
+      <div className="flex items-center gap-3">
+        <Button onClick={handleSave} disabled={update.isPending} loading={update.isPending}>
+          Save Banking Details
+        </Button>
+        {saved && (
+          <span className="flex items-center gap-1 text-sm text-[#25D366]">
+            <CheckCircle className="h-4 w-4" /> Saved
+          </span>
+        )}
+      </div>
+    </Section>
+  );
+}
+
 // ─── Main page ────────────────────────────────────────────────────────────────
 
 export default function SettingsPage() {
@@ -933,6 +1002,7 @@ export default function SettingsPage() {
         {tab === 'whatsapp' && <WhatsAppSection />}
         {tab === 'bot' && <BotSection />}
         {tab === 'payments' && <PaymentsSection />}
+        {tab === 'banking' && <BankingSection />}
         {tab === 'security' && <SecuritySection />}
         {tab === 'plan' && <PlanSection />}
       </div>

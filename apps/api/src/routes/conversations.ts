@@ -173,6 +173,8 @@ router.post('/:id/resolve', async (req: Request, res: Response) => {
     data: { status: 'RESOLVED' },
   });
 
+  pushToTenant(tenantId, 'conversation:resolved', { conversationId: id });
+
   res.json({ success: true, data: updated });
 });
 

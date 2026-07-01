@@ -79,20 +79,22 @@ async function handleCreateOrderAction(
   try {
     const total = action.items.reduce((sum, i) => sum + i.price * i.quantity, 0);
 
+    const currency = action.currency ?? action.items.find((i) => i.currency)?.currency ?? 'NGN';
+
     const order = await prisma.order.create({
       data: {
         tenantId,
         customerId,
         source: null,
         status: 'pending',
-        paymentStatus: 'unpaid',
+        paymentStatus: action.paymentMethod === 'pay_on_delivery' ? 'unpaid' : 'pending',
         fulfillmentStatus: 'unfulfilled',
         subtotal: total,
         tax: 0,
         shipping: 0,
         discount: 0,
         total,
-        currency: 'NGN',
+        currency,
         items: action.items,
         shippingAddress: action.shippingAddress ?? null,
         notes: action.notes ?? null,
@@ -225,6 +227,10 @@ export const conversationService = {
         disabledFlows,
         storeName,
         storeCurrency,
+        // Bank transfer details from tenant settings
+        bankName: (tenantSettings['bankName'] as string | undefined) ?? '',
+        accountNumber: (tenantSettings['accountNumber'] as string | undefined) ?? '',
+        accountName: (tenantSettings['accountName'] as string | undefined) ?? '',
         // Injected data-access callbacks — not persisted to DB
         fetchProducts: async (query: string, tid: string) => {
           const where = {

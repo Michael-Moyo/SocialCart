@@ -351,6 +351,16 @@ export default function ConversationsPage() {
       }
       setSseConnected(true);
     }, [queryClient]),
+    'conversation:resolved': useCallback((data: unknown) => {
+      const d = data as { conversationId: string };
+      void queryClient.invalidateQueries({ queryKey: ['conversations'] });
+      if (d.conversationId) {
+        void queryClient.invalidateQueries({ queryKey: ['conversation', d.conversationId] });
+        // If the resolved conversation is currently selected, deselect it
+        setSelectedId((prev) => prev === d.conversationId ? null : prev);
+      }
+      setSseConnected(true);
+    }, [queryClient]),
   });
 
   const { data, isLoading, refetch, isFetching } = useConversations({

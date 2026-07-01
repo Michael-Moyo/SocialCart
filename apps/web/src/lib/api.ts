@@ -85,7 +85,7 @@ export interface Order {
   shipping?: string;
   discount?: string;
   currency: string;
-  items: Array<{ sku?: string; name: string; qty: number; price: number }> | null;
+  items: Array<{ sku?: string; name: string; qty?: number; quantity?: number; price: number }> | null;
   shippingAddress: Record<string, unknown> | null;
   notes?: string | null;
   customer: { id: string; name: string; phone: string; email: string | null };
@@ -526,6 +526,17 @@ export function useUpdatePaymentSettings() {
       currency?: string;
     }) => {
       const res = await api.patch('/api/v1/settings/payments', data);
+      return res.data;
+    },
+    onSuccess: () => void qc.invalidateQueries({ queryKey: ['settings'] }),
+  });
+}
+
+export function useUpdateBankingSettings() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (data: { bankName?: string; accountNumber?: string; accountName?: string }) => {
+      const res = await api.patch('/api/v1/settings/banking', data);
       return res.data;
     },
     onSuccess: () => void qc.invalidateQueries({ queryKey: ['settings'] }),

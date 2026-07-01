@@ -202,6 +202,26 @@ router.patch('/payments', validate(paymentsSchema), async (req: Request, res: Re
   res.json({ success: true, message: 'Payment settings saved' });
 });
 
+// PATCH /api/v1/settings/banking — bank transfer details shown to WhatsApp customers
+const bankingSchema = z.object({
+  bankName: z.string().min(1).optional(),
+  accountNumber: z.string().min(6).optional(),
+  accountName: z.string().min(1).optional(),
+});
+
+router.patch('/banking', validate(bankingSchema), async (req: Request, res: Response) => {
+  const id = tenantId(req);
+  const updates = req.body as z.infer<typeof bankingSchema>;
+
+  const tenant = await prisma.tenant.findUnique({ where: { id }, select: { settings: true } });
+  const existing = (tenant?.settings ?? {}) as Record<string, unknown>;
+
+  const settingsUpdate = { ...existing, ...updates };
+  await prisma.tenant.update({ where: { id }, data: { settings: settingsUpdate } });
+
+  res.json({ success: true, message: 'Banking details saved' });
+});
+
 // GET /api/v1/settings/onboarding — returns which setup steps are complete
 router.get('/onboarding', async (req: Request, res: Response) => {
   const id = tenantId(req);
