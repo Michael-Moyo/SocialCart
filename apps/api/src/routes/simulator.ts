@@ -181,7 +181,7 @@ router.post('/message', validate(messageSchema), async (req: Request, res: Respo
                 customerId: customer.id,
                 source: null,
                 status: 'pending',
-                paymentStatus: 'unpaid',
+                paymentStatus: 'pending',
                 fulfillmentStatus: 'unfulfilled',
                 subtotal: total,
                 tax: 0, shipping: 0, discount: 0, total,

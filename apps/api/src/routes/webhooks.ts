@@ -102,7 +102,12 @@ async function processWhatsAppEvent(event: ReturnType<typeof parseWebhookPayload
       });
       tenantId = tenant?.id ?? null;
     }
-    if (!tenantId) tenantId = process.env['DEFAULT_TENANT_ID'] ?? 'default';
+    if (!tenantId) tenantId = process.env['DEFAULT_TENANT_ID'] ?? null;
+    if (!tenantId) {
+      console.warn('[webhook] No tenant found for phoneNumberId:', phoneNumberId);
+      res.sendStatus(200);
+      return;
+    }
 
     const conversation = await conversationService.handleIncoming(
       tenantId,

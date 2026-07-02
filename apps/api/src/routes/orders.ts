@@ -182,7 +182,7 @@ router.post('/', validate(createOrderSchema), async (req, res, next) => {
 // PATCH /api/v1/orders/:id — update status, tracking, notes
 const updateOrderSchema = z.object({
   status: z.enum(['pending', 'confirmed', 'processing', 'shipped', 'delivered', 'cancelled', 'refunded']).optional(),
-  paymentStatus: z.enum(['unpaid', 'paid', 'refunded']).optional(),
+  paymentStatus: z.enum(['pending', 'paid', 'partial', 'refunded', 'failed']).optional(),
   trackingNumber: z.string().optional(),
   notes: z.string().optional(),
 });

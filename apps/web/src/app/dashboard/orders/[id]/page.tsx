@@ -13,7 +13,7 @@ import { Button } from '@/components/ui/button';
 import { formatCurrency, formatDateTime, formatPhone, platformLabel } from '@/lib/utils';
 
 const ORDER_STATUSES = ['pending', 'confirmed', 'processing', 'shipped', 'delivered', 'cancelled', 'refunded'];
-const PAYMENT_STATUSES = ['unpaid', 'paid', 'refunded'];
+const PAYMENT_STATUSES = ['pending', 'paid', 'partial', 'refunded', 'failed'];
 
 function StatusDropdown({
   label,

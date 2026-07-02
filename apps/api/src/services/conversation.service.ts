@@ -87,7 +87,7 @@ async function handleCreateOrderAction(
         customerId,
         source: null,
         status: 'pending',
-        paymentStatus: action.paymentMethod === 'pay_on_delivery' ? 'unpaid' : 'pending',
+        paymentStatus: 'pending',
         fulfillmentStatus: 'unfulfilled',
         subtotal: total,
         tax: 0,
