@@ -1,5 +1,6 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  output: 'standalone',
   transpilePackages: ['@socialcart/shared'],
   images: {
     domains: ['cdn.shopify.com', 'images.unsplash.com'],

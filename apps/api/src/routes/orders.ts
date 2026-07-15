@@ -4,8 +4,34 @@ import { validate } from '../middleware/validate';
 import prisma from '../lib/prisma';
 import { buildPaginatedResponse } from '@socialcart/shared';
 import { integrationManager } from '@socialcart/integrations';
+import { notificationService } from '../services/notification.service';
+import { cartRecoveryService } from '../services/cart-recovery.service';
+import { getWhatsAppClient } from '../services/conversation.service';
+import { pushToTenant } from './sse';
 
 const router = Router();
+
+function buildOrderStatusMessage(status: string, orderRef: string, trackingNumber?: string): string | null {
+  const ref = `#${orderRef}`;
+  switch (status) {
+    case 'confirmed':
+      return `✅ *Order Confirmed!*\nYour order ${ref} has been confirmed and is being prepared.\n\nThank you for your order! 🎉`;
+    case 'processing':
+      return `⚙️ *Order Processing*\nWe're now processing your order ${ref}.\n\nWe'll notify you when it ships!`;
+    case 'shipped':
+      return trackingNumber
+        ? `🚚 *Order Shipped!*\nYour order ${ref} is on its way!\n\n*Tracking:* ${trackingNumber}\n\nExpect delivery in 2–5 business days.`
+        : `🚚 *Order Shipped!*\nYour order ${ref} is on its way!\n\nExpect delivery in 2–5 business days.`;
+    case 'delivered':
+      return `🎁 *Order Delivered!*\nYour order ${ref} has been delivered.\n\nWe hope you love it! Reply to leave feedback anytime.`;
+    case 'cancelled':
+      return `❌ *Order Cancelled*\nYour order ${ref} has been cancelled.\n\nIf you have any questions, reply to this message and we'll help you out.`;
+    case 'refunded':
+      return `💸 *Refund Processed*\nA refund for order ${ref} has been processed.\n\nPlease allow 3–7 business days for the funds to appear.`;
+    default:
+      return null;
+  }
+}
 
 const listQuerySchema = z.object({
   page: z.coerce.number().int().min(1).default(1),
@@ -139,7 +165,112 @@ router.post('/', validate(createOrderSchema), async (req, res, next) => {
       },
     });
 
+    void notificationService.notifyNewOrder(
+      tenantId,
+      order.externalId ?? order.id,
+      `${order.currency} ${Number(order.total).toFixed(2)}`
+    );
+    void cartRecoveryService.markRecovered(tenantId, customer.id);
+    pushToTenant(tenantId, 'order:created', { orderId: order.id, total: order.total, currency: order.currency });
+
     res.status(201).json({ success: true, data: { order, externalOrder } });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// PATCH /api/v1/orders/:id — update status, tracking, notes
+const updateOrderSchema = z.object({
+  status: z.enum(['pending', 'confirmed', 'processing', 'shipped', 'delivered', 'cancelled', 'refunded']).optional(),
+  paymentStatus: z.enum(['pending', 'paid', 'partial', 'refunded', 'failed']).optional(),
+  trackingNumber: z.string().optional(),
+  notes: z.string().optional(),
+});
+
+router.patch('/:id', validate(updateOrderSchema), async (req, res, next) => {
+  try {
+    const { id } = req.params as { id: string };
+    const tenantId = req.tenantId!;
+    const data = req.body as z.infer<typeof updateOrderSchema>;
+
+    const order = await prisma.order.findFirst({ where: { id, tenantId } });
+    if (!order) {
+      res.status(404).json({ success: false, error: 'Order not found' });
+      return;
+    }
+
+    const updated = await prisma.order.update({
+      where: { id },
+      data: {
+        ...(data.status && { status: data.status }),
+        ...(data.paymentStatus && { paymentStatus: data.paymentStatus }),
+        ...(data.notes !== undefined && { notes: data.notes }),
+        ...(data.trackingNumber !== undefined && {
+          shippingAddress: {
+            ...(order.shippingAddress as Record<string, unknown> ?? {}),
+            trackingNumber: data.trackingNumber,
+          },
+        }),
+      },
+      include: { customer: true },
+    });
+
+    // Notify customer on WhatsApp when order status changes meaningfully
+    const statusChanged = data.status && data.status !== order.status;
+    if (statusChanged && updated.customer?.phone) {
+      const tracking = (data.trackingNumber ?? (order.shippingAddress as Record<string, unknown> | null)?.['trackingNumber'] as string | undefined);
+      const customerMessage = buildOrderStatusMessage(data.status!, order.externalId ?? id, tracking);
+      if (customerMessage) {
+        void getWhatsAppClient(tenantId)
+          .then((client) => client.sendTextMessage(updated.customer!.phone, customerMessage))
+          .catch(() => undefined); // best-effort
+      }
+    }
+
+    // Auto-award loyalty points when order is delivered (1 point per NGN 100)
+    if (statusChanged && data.status === 'delivered' && updated.customerId) {
+      const pointsToAward = Math.floor(Number(updated.total) / 100);
+      if (pointsToAward > 0) {
+        void (async () => {
+          try {
+            const existing = await prisma.loyaltyAccount.findFirst({
+              where: { customerId: updated.customerId!, tenantId },
+            });
+            const newPoints = (existing?.points ?? 0) + pointsToAward;
+            const newTier = newPoints >= 5000 ? 'PLATINUM' : newPoints >= 2000 ? 'GOLD' : newPoints >= 500 ? 'SILVER' : 'BRONZE';
+            const historyEntry = {
+              date: new Date().toISOString(),
+              type: 'award',
+              points: pointsToAward,
+              reason: `Order ${(updated.externalId ?? updated.id).slice(0, 8).toUpperCase()} delivered`,
+              balance: newPoints,
+            };
+            const history = [...((existing?.history as unknown[]) ?? []), historyEntry];
+            if (existing) {
+              const loyaltyUpdated = await prisma.loyaltyAccount.update({
+                where: { id: existing.id },
+                data: { points: newPoints, tier: newTier as never, history },
+              });
+              if (loyaltyUpdated.tier !== existing.tier) {
+                void notificationService.notifyLoyaltyTierUp(
+                  tenantId, undefined,
+                  updated.customer?.name ?? 'Customer',
+                  loyaltyUpdated.tier
+                );
+              }
+            } else {
+              await prisma.loyaltyAccount.create({
+                data: { customerId: updated.customerId!, tenantId, points: newPoints, tier: newTier as never, history },
+              });
+            }
+          } catch (loyaltyErr) {
+            console.error('[loyalty award on delivery]', loyaltyErr);
+          }
+        })();
+      }
+    }
+
+    res.json({ success: true, data: updated });
   } catch (err) {
     next(err);
   }

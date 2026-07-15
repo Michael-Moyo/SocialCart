@@ -1,13 +1,15 @@
 'use client';
 
+import React from 'react';
 import { Bell, Search } from 'lucide-react';
 
 interface HeaderProps {
   title: string;
   description?: string;
+  actions?: React.ReactNode;
 }
 
-export function Header({ title, description }: HeaderProps) {
+export function Header({ title, description, actions }: HeaderProps) {
   return (
     <header className="bg-white border-b border-gray-200 px-6 py-4">
       <div className="flex items-center justify-between">
@@ -16,6 +18,7 @@ export function Header({ title, description }: HeaderProps) {
           {description && <p className="text-sm text-gray-500 mt-0.5">{description}</p>}
         </div>
         <div className="flex items-center gap-3">
+          {actions}
           <button className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-colors">
             <Search className="h-5 w-5" />
           </button>

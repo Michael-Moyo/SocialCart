@@ -1,7 +1,10 @@
 import { Router, Request, Response } from 'express';
 import { integrationManager, PlatformType } from '@socialcart/integrations';
-import { parseWebhookPayload } from '@socialcart/whatsapp';
+import { parseWebhookPayload, extractMessageText, extractInteractiveReplyId } from '@socialcart/whatsapp';
 import prisma from '../lib/prisma';
+import { conversationService } from '../services/conversation.service';
+import { notificationService } from '../services/notification.service';
+import { pushToTenant } from './sse';
 
 const router = Router();
 
@@ -37,16 +40,6 @@ router.post('/:tenantId/:platform', async (req: Request, res: Response) => {
         'unknown';
 
       await connector.handleWebhook(topic, req.body);
-
-      // Log to DB
-      await prisma.message.create({
-        data: {
-          conversationId: 'system',
-          direction: 'INBOUND',
-          type: 'webhook',
-          content: { platform, topic, payload: req.body },
-        },
-      }).catch(() => null); // non-critical
     }
 
     res.json({ received: true });
@@ -92,31 +85,67 @@ router.post('/whatsapp/webhook', async (req: Request, res: Response) => {
 async function processWhatsAppEvent(event: ReturnType<typeof parseWebhookPayload>[number]): Promise<void> {
   if (!event.from) return;
 
-  // Find conversation by phone number
-  const conversation = await prisma.conversation.findFirst({
-    where: { waNumber: event.from },
-    include: { customer: true },
-  });
-
   if (event.type.startsWith('message.')) {
-    // Save inbound message
+    const messageText =
+      extractInteractiveReplyId(event.message) ??
+      extractMessageText(event.message) ??
+      '';
+
+    // Look up tenant by the WhatsApp phone number ID from webhook metadata
+    const phoneNumberId = (event as { phoneNumberId?: string }).phoneNumberId
+      ?? process.env['WHATSAPP_PHONE_NUMBER_ID'];
+    let tenantId: string | null = null;
+    if (phoneNumberId) {
+      const tenant = await prisma.tenant.findFirst({
+        where: { whatsappPhoneNumberId: phoneNumberId },
+        select: { id: true },
+      });
+      tenantId = tenant?.id ?? null;
+    }
+    if (!tenantId) tenantId = process.env['DEFAULT_TENANT_ID'] ?? null;
+    if (!tenantId) {
+      console.warn('[webhook] No tenant found for phoneNumberId:', phoneNumberId);
+      res.sendStatus(200);
+      return;
+    }
+
+    const conversation = await conversationService.handleIncoming(
+      tenantId,
+      event.from,
+      messageText,
+      event.messageId
+    );
+
+    // Push real-time SSE event so dashboard updates instantly (no polling needed)
     if (conversation) {
-      await prisma.message.create({
-        data: {
-          conversationId: conversation.id,
-          direction: 'INBOUND',
-          type: event.message?.type ?? 'text',
-          content: event.message ?? {},
-          waMessageId: event.messageId,
-          sentAt: event.timestamp,
-          status: 'DELIVERED',
-        },
+      pushToTenant(tenantId, 'conversation:message', {
+        conversationId: conversation.id,
+        direction: 'INBOUND',
+        text: messageText,
       });
     }
+
+    // Notify assigned agent (or all agents) about the new inbound message
+    if (conversation && messageText) {
+      const customer = await prisma.customer.findFirst({ where: { phone: event.from, tenantId }, select: { name: true } });
+      const customerName = customer?.name ?? event.from;
+
+      if (conversation.assignedMemberId) {
+        // Notify the specific assigned agent
+        await notificationService.notifyNewMessage(tenantId, conversation.assignedMemberId, customerName, conversation.id, messageText);
+      } else {
+        // Notify owner + managers (no specific assignment yet)
+        await notificationService.notifyNewConversation(tenantId, customerName, conversation.id);
+      }
+    }
   } else if (event.type.startsWith('status.')) {
-    // Update message delivery status
     if (event.messageId) {
       const status = event.type.split('.')[1]?.toUpperCase() as 'SENT' | 'DELIVERED' | 'READ' | 'FAILED';
+      const updated = await prisma.message.findFirst({
+        where: { waMessageId: event.messageId },
+        select: { id: true, conversationId: true },
+      });
+
       await prisma.message.updateMany({
         where: { waMessageId: event.messageId },
         data: {
@@ -125,6 +154,27 @@ async function processWhatsAppEvent(event: ReturnType<typeof parseWebhookPayload
           ...(status === 'READ' && { readAt: event.timestamp }),
         },
       });
+
+      // Push read receipt to SSE so dashboard ticks update without polling
+      if (updated) {
+        const msg = await prisma.message.findFirst({
+          where: { id: updated.id },
+          select: { conversationId: true },
+        });
+        if (msg) {
+          const conv = await prisma.conversation.findUnique({
+            where: { id: msg.conversationId },
+            select: { tenantId: true },
+          });
+          if (conv) {
+            pushToTenant(conv.tenantId, 'message:status', {
+              messageId: event.messageId,
+              conversationId: msg.conversationId,
+              status,
+            });
+          }
+        }
+      }
     }
   }
 }

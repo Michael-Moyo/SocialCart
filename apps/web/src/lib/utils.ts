@@ -54,6 +54,16 @@ export function getStatusColor(status: string): string {
     ERROR: 'text-red-700 bg-red-100',
     INACTIVE: 'text-gray-700 bg-gray-100',
     SYNCING: 'text-blue-700 bg-blue-100',
+    OPEN: 'text-blue-700 bg-blue-100',
+    RESOLVED: 'text-green-700 bg-green-100',
+    BOT: 'text-purple-700 bg-purple-100',
+    PENDING: 'text-yellow-700 bg-yellow-100',
+    DRAFT: 'text-gray-700 bg-gray-100',
+    SCHEDULED: 'text-blue-700 bg-blue-100',
+    RUNNING: 'text-green-700 bg-green-100',
+    PAUSED: 'text-yellow-700 bg-yellow-100',
+    COMPLETED: 'text-gray-600 bg-gray-100',
+    CANCELLED: 'text-red-700 bg-red-100',
   };
   return colors[status] ?? 'text-gray-700 bg-gray-100';
 }

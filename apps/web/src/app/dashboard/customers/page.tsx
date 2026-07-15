@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import Link from 'next/link';
 import { Search } from 'lucide-react';
 import { Header } from '@/components/layout/header';
 import { Button } from '@/components/ui/button';
@@ -16,7 +17,7 @@ export default function CustomersPage() {
   const { data, isLoading } = useCustomers({ page, limit: 20, search: search || undefined });
 
   return (
-    <div>
+    <div className="flex-1 overflow-y-auto">
       <Header title="Customers" description="All customers across your connected platforms" />
 
       <div className="p-6 space-y-4">
@@ -64,15 +65,15 @@ export default function CustomersPage() {
               data.data.map((customer) => (
                 <TableRow key={customer.id}>
                   <TableCell>
-                    <div className="flex items-center gap-3">
+                    <Link href={`/dashboard/customers/${customer.id}`} className="flex items-center gap-3 hover:opacity-80 transition-opacity">
                       <div className="w-8 h-8 rounded-full bg-brand-100 flex items-center justify-center text-brand-700 text-sm font-semibold flex-shrink-0">
                         {customer.name.charAt(0).toUpperCase()}
                       </div>
                       <div>
-                        <p className="font-medium">{customer.name}</p>
+                        <p className="font-medium text-[#25D366] hover:underline">{customer.name}</p>
                         {customer.email && <p className="text-xs text-gray-400">{customer.email}</p>}
                       </div>
-                    </div>
+                    </Link>
                   </TableCell>
                   <TableCell className="font-mono text-xs">{formatPhone(customer.phone)}</TableCell>
                   <TableCell>

@@ -1,11 +1,14 @@
 'use client';
 
 import { useState } from 'react';
+import Link from 'next/link';
+import { useQueryClient } from '@tanstack/react-query';
 import { Header } from '@/components/layout/header';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Table, TableHead, TableBody, TableRow, TableHeader, TableCell, TableEmpty } from '@/components/ui/table';
 import { useOrders } from '@/lib/api';
+import { useSSE } from '@/lib/use-sse';
 import { formatCurrency, formatDateTime, platformLabel } from '@/lib/utils';
 
 const STATUS_FILTERS = ['all', 'pending', 'confirmed', 'processing', 'shipped', 'delivered', 'cancelled'];
@@ -13,6 +16,11 @@ const STATUS_FILTERS = ['all', 'pending', 'confirmed', 'processing', 'shipped', 
 export default function OrdersPage() {
   const [page, setPage] = useState(1);
   const [status, setStatus] = useState<string>('all');
+  const qc = useQueryClient();
+
+  useSSE({
+    'order:created': () => { void qc.invalidateQueries({ queryKey: ['orders'] }); },
+  });
 
   const { data, isLoading } = useOrders({
     page,
@@ -21,7 +29,7 @@ export default function OrdersPage() {
   });
 
   return (
-    <div>
+    <div className="flex-1 overflow-y-auto">
       <Header title="Orders" description="All orders from your connected platforms" />
 
       <div className="p-6 space-y-4">
@@ -68,11 +76,11 @@ export default function OrdersPage() {
               ))
             ) : data?.data?.length ? (
               data.data.map((order) => (
-                <TableRow key={order.id}>
+                <TableRow key={order.id} className="cursor-pointer hover:bg-gray-50 transition-colors">
                   <TableCell>
-                    <span className="font-mono text-xs text-gray-600">
-                      {order.externalId?.slice(0, 12) ?? order.id.slice(0, 8)}
-                    </span>
+                    <Link href={`/dashboard/orders/${order.id}`} className="font-mono text-xs text-[#25D366] hover:underline">
+                      {order.externalId?.slice(0, 12) ?? order.id.slice(0, 8).toUpperCase()}
+                    </Link>
                   </TableCell>
                   <TableCell>
                     <div>

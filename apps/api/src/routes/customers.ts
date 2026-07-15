@@ -45,10 +45,22 @@ router.get('/', validate(listQuerySchema, 'query'), async (req, res, next) => {
         skip: (page - 1) * limit,
         take: limit,
         orderBy: { createdAt: 'desc' },
+        include: {
+          _count: { select: { orders: true } },
+          orders: {
+            select: { total: true },
+          },
+        },
       }),
     ]);
 
-    res.json({ success: true, ...buildPaginatedResponse(customers, total, page, limit) });
+    const enriched = customers.map(({ _count, orders, ...c }) => ({
+      ...c,
+      totalOrders: _count.orders,
+      totalSpent: orders.reduce((sum, o) => sum + Number(o.total), 0).toFixed(2),
+    }));
+
+    res.json({ success: true, ...buildPaginatedResponse(enriched, total, page, limit) });
   } catch (err) {
     next(err);
   }
@@ -60,7 +72,11 @@ router.get('/:id', async (req, res, next) => {
     const customer = await prisma.customer.findFirst({
       where: { id: req.params['id']!, tenantId: req.tenantId! },
       include: {
-        orders: { orderBy: { createdAt: 'desc' }, take: 10 },
+        orders: {
+          orderBy: { createdAt: 'desc' },
+          take: 10,
+          select: { id: true, status: true, total: true, items: true, createdAt: true },
+        },
         loyaltyAccount: true,
       },
     });
@@ -86,6 +102,40 @@ router.get('/phone/:phone', async (req, res, next) => {
       res.status(404).json({ success: false, error: 'Customer not found' });
       return;
     }
+    res.json({ success: true, data: customer });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// PATCH /api/v1/customers/:id
+const updateCustomerSchema = z.object({
+  name: z.string().min(1).optional(),
+  email: z.string().email().optional().nullable(),
+  tags: z.array(z.string()).optional(),
+});
+
+router.patch('/:id', validate(updateCustomerSchema), async (req, res, next) => {
+  try {
+    const tenantId = req.tenantId!;
+    const { id } = req.params as { id: string };
+    const body = req.body as z.infer<typeof updateCustomerSchema>;
+
+    const existing = await prisma.customer.findFirst({ where: { id, tenantId } });
+    if (!existing) {
+      res.status(404).json({ success: false, error: 'Customer not found' });
+      return;
+    }
+
+    const customer = await prisma.customer.update({
+      where: { id },
+      data: {
+        ...(body.name !== undefined && { name: body.name }),
+        ...(body.email !== undefined && { email: body.email }),
+        ...(body.tags !== undefined && { tags: body.tags }),
+      },
+    });
+
     res.json({ success: true, data: customer });
   } catch (err) {
     next(err);

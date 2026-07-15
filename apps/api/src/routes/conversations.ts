@@ -1,0 +1,181 @@
+import { Router, Request, Response } from 'express';
+import prisma from '../lib/prisma';
+import { pushToTenant } from './sse';
+import { notificationService } from '../services/notification.service';
+import { getWhatsAppClient } from '../services/conversation.service';
+
+const router = Router();
+
+// GET /api/v1/conversations
+router.get('/', async (req: Request, res: Response) => {
+  const tenantId = (req as Request & { tenantId?: string }).tenantId ?? '';
+  const page = Math.max(1, parseInt((req.query['page'] as string) ?? '1', 10));
+  const limit = Math.min(100, Math.max(1, parseInt((req.query['limit'] as string) ?? '20', 10)));
+  const skip = (page - 1) * limit;
+
+  const memberId = (req as Request & { teamMemberId?: string }).teamMemberId;
+  const assignedToMe = req.query['assignedToMe'] === 'true';
+  const status = req.query['status'] as string | undefined;
+
+  const where = {
+    tenantId,
+    ...(assignedToMe && memberId ? { assignedMemberId: memberId } : {}),
+    ...(status ? { status: status as never } : {}),
+  };
+
+  const [conversations, total] = await Promise.all([
+    prisma.conversation.findMany({
+      where,
+      include: {
+        customer: { select: { id: true, name: true, phone: true } },
+        messages: { orderBy: { sentAt: 'desc' }, take: 1 },
+        _count: { select: { messages: true } },
+      },
+      orderBy: { updatedAt: 'desc' },
+      skip,
+      take: limit,
+    }),
+    prisma.conversation.count({ where }),
+  ]);
+
+  res.json({
+    success: true,
+    data: conversations,
+    pagination: { page, limit, total, pages: Math.ceil(total / limit) },
+  });
+});
+
+// GET /api/v1/conversations/:id
+router.get('/:id', async (req: Request, res: Response) => {
+  const tenantId = (req as Request & { tenantId?: string }).tenantId ?? '';
+  const { id } = req.params as { id: string };
+
+  const conversation = await prisma.conversation.findFirst({
+    where: { id, tenantId },
+    include: {
+      customer: true,
+      messages: { orderBy: { sentAt: 'asc' } },
+    },
+  });
+
+  if (!conversation) {
+    res.status(404).json({ success: false, error: 'Conversation not found' });
+    return;
+  }
+
+  res.json({ success: true, data: conversation });
+});
+
+// POST /api/v1/conversations/:id/assign
+router.post('/:id/assign', async (req: Request, res: Response) => {
+  const tenantId = (req as Request & { tenantId?: string }).tenantId ?? '';
+  const { id } = req.params as { id: string };
+  const { agentId } = req.body as { agentId?: string };
+
+  if (!agentId) {
+    res.status(400).json({ success: false, error: 'agentId is required' });
+    return;
+  }
+
+  const conversation = await prisma.conversation.findFirst({ where: { id, tenantId } });
+  if (!conversation) {
+    res.status(404).json({ success: false, error: 'Conversation not found' });
+    return;
+  }
+
+  const agent = await prisma.teamMember.findFirst({ where: { id: agentId, tenantId } });
+  if (!agent) {
+    res.status(404).json({ success: false, error: 'Agent not found' });
+    return;
+  }
+
+  const updated = await prisma.conversation.update({
+    where: { id },
+    data: { assignedTo: agent.name, assignedMemberId: agentId, status: 'OPEN' },
+  });
+
+  void notificationService.notifyConversationAssigned(
+    tenantId, agentId, id, conversation.waNumber
+  );
+  pushToTenant(tenantId, 'conversation:assigned', { conversationId: id, agentId, agentName: agent.name });
+
+  res.json({ success: true, data: updated });
+});
+
+// POST /api/v1/conversations/:id/reply  (agent sends a manual WhatsApp message)
+router.post('/:id/reply', async (req: Request, res: Response) => {
+  const tenantId = (req as Request & { tenantId?: string }).tenantId ?? '';
+  const { id } = req.params as { id: string };
+  const { text } = req.body as { text?: string };
+
+  if (!text?.trim()) {
+    res.status(400).json({ success: false, error: 'text is required' });
+    return;
+  }
+
+  const conversation = await prisma.conversation.findFirst({ where: { id, tenantId } });
+  if (!conversation) {
+    res.status(404).json({ success: false, error: 'Conversation not found' });
+    return;
+  }
+
+  // Send via per-tenant WhatsApp client
+  let waMessageId: string | null = null;
+  try {
+    const client = await getWhatsAppClient(tenantId);
+    const result = await client.sendTextMessage(conversation.waNumber, text.trim());
+    waMessageId = result.messages[0]?.id ?? null;
+  } catch {
+    // Continue — still save the message even if WA delivery fails in dev
+  }
+
+  const message = await prisma.message.create({
+    data: {
+      conversationId: id,
+      direction: 'OUTBOUND',
+      type: 'text',
+      content: { text: text.trim() },
+      waMessageId,
+      status: waMessageId ? 'SENT' : 'PENDING',
+      sentAt: new Date(),
+    },
+  });
+
+  // Flip conversation to OPEN (human took over from bot)
+  await prisma.conversation.update({
+    where: { id },
+    data: { status: 'OPEN', updatedAt: new Date() },
+  });
+
+  // Push SSE so all open dashboard tabs see the reply immediately
+  pushToTenant(tenantId, 'conversation:message', {
+    conversationId: id,
+    direction: 'OUTBOUND',
+    text: text.trim(),
+  });
+
+  res.json({ success: true, data: message });
+});
+
+// POST /api/v1/conversations/:id/resolve
+router.post('/:id/resolve', async (req: Request, res: Response) => {
+  const tenantId = (req as Request & { tenantId?: string }).tenantId ?? '';
+  const { id } = req.params as { id: string };
+
+  const conversation = await prisma.conversation.findFirst({ where: { id, tenantId } });
+  if (!conversation) {
+    res.status(404).json({ success: false, error: 'Conversation not found' });
+    return;
+  }
+
+  const updated = await prisma.conversation.update({
+    where: { id },
+    data: { status: 'RESOLVED' },
+  });
+
+  pushToTenant(tenantId, 'conversation:resolved', { conversationId: id });
+
+  res.json({ success: true, data: updated });
+});
+
+export default router;

@@ -68,6 +68,19 @@ enum CartStatus {
   RECOVERED
 }
 
+enum PaymentProvider {
+  PAYSTACK
+  FLUTTERWAVE
+  MANUAL
+}
+
+enum PaymentLinkStatus {
+  PENDING
+  PAID
+  EXPIRED
+  CANCELLED
+}
+
 enum ConversationStatus {
   OPEN
   PENDING
@@ -112,6 +125,32 @@ enum LoyaltyTier {
   PLATINUM
 }
 
+enum TeamRole {
+  OWNER
+  MANAGER
+  AGENT
+  SALES_REP
+}
+
+enum NotificationChannel {
+  IN_APP
+  WHATSAPP
+  PUSH
+}
+
+enum NotificationType {
+  NEW_ORDER
+  NEW_CONVERSATION
+  CONVERSATION_ASSIGNED
+  CART_ABANDONED
+  CAMPAIGN_COMPLETE
+  LOYALTY_TIER_UP
+  TEAM_INVITE
+  LOW_STOCK
+  AGENT_REQUEST
+  SYSTEM
+}
+
 // ─── Models ───────────────────────────────────────────────────────────────────
 
 model Tenant {
@@ -119,7 +158,7 @@ model Tenant {
   name                  String
   phone                 String    @unique
   email                 String?   @unique
-  passwordHash          String
+  passwordHash          String?   // kept for legacy / fallback; primary auth is WhatsApp OTP
   whatsappBusinessId    String?
   whatsappPhoneNumberId String?
   plan                  Plan      @default(FREE)
@@ -128,13 +167,17 @@ model Tenant {
   createdAt             DateTime  @default(now())
   updatedAt             DateTime  @updatedAt
 
-  integrations  Integration[]
-  products      Product[]
-  customers     Customer[]
-  orders        Order[]
-  carts         Cart[]
-  conversations Conversation[]
-  campaigns     Campaign[]
+  integrations      Integration[]
+  products          Product[]
+  customers         Customer[]
+  orders            Order[]
+  carts             Cart[]
+  conversations     Conversation[]
+  campaigns         Campaign[]
+  teamMembers       TeamMember[]
+  notifications     Notification[]
+  pushSubscriptions PushSubscription[]
+  paymentLinks      PaymentLink[]
 
   @@index([phone])
   @@map("tenants")
@@ -215,6 +258,7 @@ model Customer {
   carts          Cart[]
   conversations  Conversation[]
   loyaltyAccount LoyaltyAccount?
+  paymentLinks   PaymentLink[]
 
   @@unique([tenantId, phone])
   @@index([tenantId])
@@ -247,8 +291,9 @@ model Order {
   createdAt         DateTime          @default(now())
   updatedAt         DateTime          @updatedAt
 
-  tenant   Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  customer Customer @relation(fields: [customerId], references: [id])
+  tenant       Tenant        @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  customer     Customer      @relation(fields: [customerId], references: [id])
+  paymentLinks PaymentLink[]
 
   @@index([tenantId])
   @@index([customerId])
@@ -281,20 +326,22 @@ model Cart {
 }
 
 model Conversation {
-  id          String             @id @default(uuid())
-  tenantId    String
-  customerId  String
-  waNumber    String
-  status      ConversationStatus @default(BOT)
-  currentFlow String?
-  context     Json               @default("{}")
-  assignedTo  String?
-  createdAt   DateTime           @default(now())
-  updatedAt   DateTime           @updatedAt
+  id               String             @id @default(uuid())
+  tenantId         String
+  customerId       String
+  waNumber         String
+  status           ConversationStatus @default(BOT)
+  currentFlow      String?
+  context          Json               @default("{}")
+  assignedTo       String?            // legacy free-text
+  assignedMemberId String?            // FK to TeamMember
+  createdAt        DateTime           @default(now())
+  updatedAt        DateTime           @updatedAt
 
-  tenant   Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  customer Customer  @relation(fields: [customerId], references: [id])
-  messages Message[]
+  tenant         Tenant      @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  customer       Customer    @relation(fields: [customerId], references: [id])
+  messages       Message[]
+  assignedMember TeamMember? @relation("AssignedConversations", fields: [assignedMemberId], references: [id])
 
   @@index([tenantId])
   @@index([customerId])
@@ -347,6 +394,45 @@ model Campaign {
   @@map("campaigns")
 }
 
+// Platform-level super admin (SocialCart operators)
+model SuperAdmin {
+  id           String   @id @default(uuid())
+  name         String
+  email        String   @unique
+  passwordHash String
+  isActive     Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@map("super_admins")
+}
+
+// Team members within a tenant (agents, managers, sales reps)
+model TeamMember {
+  id           String    @id @default(uuid())
+  tenantId     String
+  name         String
+  email        String?
+  phone        String?
+  passwordHash String
+  role         TeamRole  @default(AGENT)
+  managerId    String?   // null for OWNER/top-level MANAGER
+  isActive     Boolean   @default(true)
+  permissions  Json      @default("{}")
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  tenant                Tenant         @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  manager               TeamMember?    @relation("TeamHierarchy", fields: [managerId], references: [id])
+  reports               TeamMember[]   @relation("TeamHierarchy")
+  assignedConversations Conversation[] @relation("AssignedConversations")
+
+  @@unique([tenantId, email])
+  @@index([tenantId])
+  @@index([managerId])
+  @@map("team_members")
+}
+
 model LoyaltyAccount {
   id         String       @id @default(uuid())
   customerId String       @unique
@@ -361,4 +447,85 @@ model LoyaltyAccount {
 
   @@index([tenantId])
   @@map("loyalty_accounts")
+}
+
+// WhatsApp OTP codes for tenant authentication
+model OtpCode {
+  id        String   @id @default(uuid())
+  phone     String
+  code      String   // 6-digit, stored hashed
+  expiresAt DateTime
+  used      Boolean  @default(false)
+  attempts  Int      @default(0)
+  createdAt DateTime @default(now())
+
+  @@index([phone])
+  @@map("otp_codes")
+}
+
+// In-app + cross-channel notifications
+model Notification {
+  id        String           @id @default(uuid())
+  tenantId  String
+  memberId  String?          // null = owner-level notification
+  type      NotificationType
+  title     String
+  body      String
+  data      Json             @default("{}")  // extra context (orderId, conversationId, etc.)
+  read      Boolean          @default(false)
+  channels  NotificationChannel[]
+  createdAt DateTime         @default(now())
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@index([tenantId, read])
+  @@index([memberId])
+  @@map("notifications")
+}
+
+// Payment links created at checkout and sent via WhatsApp
+model PaymentLink {
+  id           String            @id @default(uuid())
+  tenantId     String
+  customerId   String
+  orderId      String?           // set once order is confirmed
+  provider     PaymentProvider
+  externalRef  String?           // Paystack/Flutterwave reference
+  amount       Decimal           @db.Decimal(12, 2)
+  currency     String            @default("NGN")
+  url          String
+  status       PaymentLinkStatus @default(PENDING)
+  metadata     Json              @default("{}")
+  expiresAt    DateTime
+  paidAt       DateTime?
+  createdAt    DateTime          @default(now())
+  updatedAt    DateTime          @updatedAt
+
+  tenant   Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  customer Customer  @relation(fields: [customerId], references: [id])
+  order    Order?    @relation(fields: [orderId], references: [id])
+
+  @@index([tenantId])
+  @@index([externalRef])
+  @@index([status])
+  @@map("payment_links")
+}
+
+// Web Push subscriptions (VAPID)
+model PushSubscription {
+  id        String   @id @default(uuid())
+  tenantId  String
+  memberId  String?
+  endpoint  String   @unique
+  p256dh    String
+  auth      String
+  userAgent String?
+  createdAt DateTime @default(now())
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@index([memberId])
+  @@map("push_subscriptions")
 }

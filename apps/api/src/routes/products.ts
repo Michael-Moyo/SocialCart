@@ -3,6 +3,9 @@ import { z } from 'zod';
 import { validate } from '../middleware/validate';
 import prisma from '../lib/prisma';
 import { buildPaginatedResponse } from '@socialcart/shared';
+import { notificationService } from '../services/notification.service';
+
+const LOW_STOCK_THRESHOLD = 5;
 
 const router = Router();
 
@@ -62,6 +65,114 @@ router.get('/:id', async (req, res, next) => {
       return;
     }
     res.json({ success: true, data: product });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// POST /api/v1/products — create a manual product
+const createProductSchema = z.object({
+  name: z.string().min(1),
+  description: z.string().optional(),
+  sku: z.string().optional(),
+  price: z.number().positive(),
+  compareAtPrice: z.number().positive().optional(),
+  currency: z.string().length(3).default('NGN'),
+  inventory: z.number().int().min(0).default(0),
+  categories: z.array(z.string()).optional(),
+  images: z.array(z.object({ url: z.string().url(), alt: z.string().optional() })).optional(),
+  status: z.enum(['active', 'inactive', 'draft']).default('active'),
+});
+
+router.post('/', validate(createProductSchema), async (req, res, next) => {
+  try {
+    const tenantId = req.tenantId!;
+    const body = req.body as z.infer<typeof createProductSchema>;
+    const product = await prisma.product.create({
+      data: {
+        tenantId,
+        name: body.name,
+        description: body.description ?? '',
+        sku: body.sku ?? `MANUAL-${Date.now()}`,
+        price: body.price,
+        compareAtPrice: body.compareAtPrice,
+        currency: body.currency,
+        inventory: body.inventory,
+        categories: body.categories ?? [],
+        images: body.images ?? [],
+        status: body.status,
+        source: null,
+      },
+    });
+    res.status(201).json({ success: true, data: product });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// PATCH /api/v1/products/:id
+const updateProductSchema = z.object({
+  name: z.string().min(1).optional(),
+  description: z.string().optional(),
+  price: z.number().positive().optional(),
+  compareAtPrice: z.number().positive().nullable().optional(),
+  inventory: z.number().int().min(0).optional(),
+  status: z.enum(['active', 'inactive', 'draft']).optional(),
+  categories: z.array(z.string()).optional(),
+  images: z.array(z.object({ url: z.string().url(), alt: z.string().optional() })).optional(),
+});
+
+router.patch('/:id', validate(updateProductSchema), async (req, res, next) => {
+  try {
+    const { id } = req.params as { id: string };
+    const tenantId = req.tenantId!;
+    const body = req.body as z.infer<typeof updateProductSchema>;
+    const existing = await prisma.product.findFirst({ where: { id, tenantId } });
+    if (!existing) {
+      res.status(404).json({ success: false, error: 'Product not found' });
+      return;
+    }
+    const product = await prisma.product.update({
+      where: { id },
+      data: {
+        ...(body.name !== undefined && { name: body.name }),
+        ...(body.description !== undefined && { description: body.description }),
+        ...(body.price !== undefined && { price: body.price }),
+        ...(body.compareAtPrice !== undefined && { compareAtPrice: body.compareAtPrice }),
+        ...(body.inventory !== undefined && { inventory: body.inventory }),
+        ...(body.status !== undefined && { status: body.status }),
+        ...(body.categories !== undefined && { categories: body.categories }),
+        ...(body.images !== undefined && { images: body.images }),
+      },
+    });
+
+    // Fire low-stock alert when inventory transitions into danger zone
+    if (
+      body.inventory !== undefined &&
+      existing.inventory > LOW_STOCK_THRESHOLD &&
+      body.inventory <= LOW_STOCK_THRESHOLD
+    ) {
+      void notificationService.notifyLowStock(tenantId, product.name, body.inventory);
+    }
+
+    res.json({ success: true, data: product });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// DELETE /api/v1/products/:id
+router.delete('/:id', async (req, res, next) => {
+  try {
+    const { id } = req.params as { id: string };
+    const tenantId = req.tenantId!;
+    const existing = await prisma.product.findFirst({ where: { id, tenantId } });
+    if (!existing) {
+      res.status(404).json({ success: false, error: 'Product not found' });
+      return;
+    }
+    await prisma.product.delete({ where: { id } });
+    res.json({ success: true });
   } catch (err) {
     next(err);
   }

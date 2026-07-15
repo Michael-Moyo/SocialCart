@@ -11,7 +11,8 @@ export function validate(schema: ZodSchema, target: ValidateTarget = 'body'): Re
       return;
     }
     // Replace with parsed (coerced/defaulted) values
-    (req as Record<string, unknown>)[target] = result.data;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (req as any)[target] = result.data;
     next();
   };
 }
